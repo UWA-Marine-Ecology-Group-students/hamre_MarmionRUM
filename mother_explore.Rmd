@@ -35,14 +35,6 @@ library(patchwork)
 library(forcats)
 library(knitr)
 
-# directories
-# w.dir <- "/Users/23088313/Documents/git_repos/Analysis-Hamre-Bioeconomic" # set working directory
-# d.dir <- paste(w.dir, "Esperance_RUM/rumIgnore", sep='/') # set data directory
-# f.dir <- paste(w.dir, "Esperance_RUM/rumFunc", sep = '/') # set functions directory
-# s.dir <- paste(w.dir, "spIgnore/gpkg", sep='/') # set gpkg directory
-# r.dir <- paste(w.dir, "spIgnore/raster", sep='/') # set raster directory
-# rumExplore_plots <- paste(w.dir, "Esperance_RUM/Plots/rumExplore", sep='/') # set plots directory
-
 # source 
 source("./functions/basemap.R") # base map and spatial files
 portrait <- TRUE # set orientation of map
