@@ -67,6 +67,9 @@ Calculates the average depth within each grid cell (site). This does work is aft
 
 ```{r depth}
 sites <- mean_depth(bathy, sites) # get average depth of grid
+
+# ggplot() +
+#   geom_sf(data = sites, aes(fill = Depth), lwd = 0.05)
 ```
 
 ## Data prep
@@ -79,6 +82,9 @@ sf_use_s2(FALSE)
 waterGrid <- st_difference(sites, st_combine(coast)) # isolates grid to water
 polyCentroid <- st_centroid_within_poly(waterGrid) # gets centroid of every grid cell
 waterGrid$polyCentroid <- polyCentroid$geom # bind centroid to grid sf 
+
+# ggplot() +
+#   geom_sf(data = waterGrid$polyCentroid)
 ```
 
 ## Habitat
@@ -91,6 +97,9 @@ Calculates the area (km2) of each habitat type in each individual grid cell (sit
 Calculates the area of each polygon
 ```{r area}
 waterGrid$area <- round(set_units(st_area(waterGrid), km^2), 2) 
+
+# ggplot() +
+#   geom_sf(data = waterGrid, aes(fill = as.numeric(area)))
 ```
 
 ## Artificial infrastructure present
@@ -108,8 +117,10 @@ coast$area <- as.numeric(set_units(st_area(coast), km^2)) # area of polygons in 
 
 # Distance from mainland
 ## extracting mainland from coast polygon
-mainland <- coast %>% max(coast$area)
- 
+mainland <- coast %>% 
+  arrange(desc(area))  %>% 
+  slice(1)
+
 # ## calculate distance form mainland
 km_mainland <- dist_mainland(waterGrid$polyCentroid, mainland)
 # 
@@ -124,13 +135,14 @@ waterGrid$km_mainland <- km_mainland[,1]
 ## create binary column indicating whether grid cell is adjacent to island
 # waterGrid %<>% 
 #   mutate(isl_adj = ifelse(as.list(st_intersects(waterGrid, islands)) %in% "integer(0)", 0, 1))
+
+# ggplot() +
+#   geom_sf(data = waterGrid, aes(fill = km_mainland))
 ```
 
 # Fetch
 Calculating the Southerly and Easterly fetch from the centroid of all polygons on every day. If fetch is over 2.5km then 1 else 0.
 ```{r fetch}
-# waterGrid <- readRDS("./data/gpkg/2.0_espSites_4283.gpkg") # sites with
-# 
 # coast_lambert <- coast %>% st_transform(crs = 3112) # need land lambert
 # 
 # cent <- waterGrid %>%  st_drop_geometry() %>% st_as_sf() # dropping geom
@@ -141,7 +153,19 @@ Calculating the Southerly and Easterly fetch from the centroid of all polygons o
 ## Shelter
 Fetch was too computationally heavy for my time scale, so i've made a shape file with all the grids that have shelter present.
 ```{r}
-waterGrid$shelter <- ifelse(waterGrid$gridID %in% shelter$gridID, 1, 0)
+waterShelter <- st_difference(shelter, st_combine(coast)) # isolate
+
+shelter_grids <- as.data.frame(st_equals(waterGrid, waterShelter, sparse = FALSE))
+
+shelter_grids <- shelter_grids %>%
+  rowwise %>%
+  mutate(shelter = if_any(.cols = contains('V'), isTRUE)) %>%
+  ungroup
+
+waterGrid <- waterGrid %>%
+  mutate(shelter = ifelse(shelter_grids$shelter %in% TRUE, 1, 0))
+# ggplot() +
+#   geom_sf(data = waterGrid, aes(fill = shelter))
 ```
 
 ## Commonwealth NPZ
@@ -153,6 +177,8 @@ npz_grids <- as.list(st_intersects(waterGrid, npz, sparse = FALSE))
 
 waterGrid <- waterGrid %>% 
   mutate(NPZ = ifelse(npz_grids == TRUE, 1, 0))
+# ggplot() +
+#   geom_sf(data = waterGrid, aes(fill = NPZ))
 ```
 
 # Distance to BR
