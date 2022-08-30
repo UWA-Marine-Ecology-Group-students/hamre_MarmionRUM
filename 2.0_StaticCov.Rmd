@@ -128,16 +128,19 @@ waterGrid$km_mainland <- km_mainland[,1]
 
 # Adjacent to land
 ## extracting islands from coast polygon
-# islands <- coast %>%                                    
-#   arrange(desc(area))  %>% 
-#   slice(3:nrow(coast))
-  
+islands <- coast %>%
+  arrange(desc(area))  %>%
+  slice(2:nrow(coast))
+
 ## create binary column indicating whether grid cell is adjacent to island
-# waterGrid %<>% 
-#   mutate(isl_adj = ifelse(as.list(st_intersects(waterGrid, islands)) %in% "integer(0)", 0, 1))
+waterGrid %<>%
+  mutate(isl_adj = ifelse(as.list(st_intersects(waterGrid, islands)) %in% "integer(0)", 0, 1))
 
 # ggplot() +
 #   geom_sf(data = waterGrid, aes(fill = km_mainland))
+#   
+# ggplot()+
+#   geom_sf(data = waterGrid, aes(fill = isl_adj))
 ```
 
 # Fetch
