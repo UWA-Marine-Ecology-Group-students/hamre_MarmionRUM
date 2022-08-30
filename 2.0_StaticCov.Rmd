@@ -153,6 +153,7 @@ Calculating the Southerly and Easterly fetch from the centroid of all polygons o
 ## Shelter
 Fetch was too computationally heavy for my time scale, so i've made a shape file with all the grids that have shelter present.
 ```{r}
+shelter <- shelter %>% st_transform(crs(coast))
 waterShelter <- st_difference(shelter, st_combine(coast)) # isolate
 
 shelter_grids <- as.data.frame(st_equals(waterGrid, waterShelter, sparse = FALSE))

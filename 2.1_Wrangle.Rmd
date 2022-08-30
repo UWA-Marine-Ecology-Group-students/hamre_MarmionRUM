@@ -18,12 +18,43 @@ library(magrittr)
 
 # data
 ## gpkg - ESPG 4283 (GDA94)
-sites <- readRDS("./data/gpkg/2.0_scbioSites_4283.gpkg") # sites with static attributes
-dat <- read_csv("ignore/01_data/1.2_esp.csv") %>% filter(ActivityType == "Extractive")
-BR <- st_read("./data/gpkg/scbioBR_4283.gpkg") %>%  dplyr::select(RampID) # boat ramps
+sites <- readRDS("./data/gpkg/2.0_Sites_4283.gpkg") # sites with static attributes
+dat <- read_csv("data/01_data/1.2_dat.csv") %>% filter(ActivityType == "Extractive")
+BR <- st_read("./data/gpkg/BR_4283.gpkg") %>%  dplyr::select(RampID) # boat ramps
 
 sf_use_s2(FALSE)
 ```
+
+# Wrangling number of trips from boat ramp data
+This data (BRtrips) was from Matts national RUM. It was made by...
+
+   - Getting the annual number of boat launches for South Coast
+   - Calculate the proportion of launches that would happen each month
+   - Applying a gravity function to the monthly proportions. Lets calculates the estimated number of launches      per boat ramp given their populations. There are some issues with this, for example, Exmouth marina           would should more trips than Tanatbiddi because it closer proximity to a population hub, same for             Esperanace and Bandy Creek.
+   - The increasing number in the columns represents a change in the assumptions of the gravity function. The      higher the number the more the boat ramps interfere with each other given there proximity together. 
+
+```{r}
+BRtrips <- read.csv("./data/02_data/Trips_Ramp_out.csv") %>% 
+  filter(State_reg == "WA" & Name_reg == "West Coast") # filter to state and region
+
+# check ramps names
+# unique(BRtrips$Ramp_name)
+
+BRtrips <- BRtrips %>% 
+  filter(Ramp_name %in% c("Hillarys Marina", "Mindarie Marina", "Ocean Reef Marina", "Two Rocks Marina")) %>% 
+  dplyr::select(Ramp_name, RampID, Month, TRIPS_ramp_prop_Grvt__5, upp_TRIPS_Grvt__5, low_TRIPS_Grvt__5) %>% 
+  group_by(RampID, Ramp_name) %>%
+  summarize(across(where(is.numeric), list(sum), .names = "{.col}")) %>% # summing across months to get annual estimates
+  mutate(RampID = as.numeric(RampID))
+
+BRtrips <- left_join(BRtrips, BR, by = c("RampID")) %>% # join to geometry
+  st_as_sf()
+
+write_csv(BRtrips, "./data/02_data/2.1_BRtrips.csv")
+saveRDS(BRtrips, "./data/gpkg/2.1_BRtrips.gpkg")
+```
+
+
 
 # Make choice set
 ```{r choice set}
@@ -42,9 +73,9 @@ gridID_vis <- sites %>%
 
 # Writing choice set to ID grids to close
 choice <- sites %>% dplyr::select(gridID_alt, geom)
-st_write(choice, "./data/gpkg/2.1_scbioChoiceSetQ_4283.gpkg", append = FALSE) # need to write with st_write to open in QGISRUMs
+st_write(choice, "./data/gpkg/2.1_ChoiceSetQ_4283.gpkg", append = FALSE) # need to write with st_write to open in QGISRUMs
 
-saveRDS(sites, "./data/gpkg/2.1_scbioChoiceSet_4283.gpkg")
+saveRDS(sites, "./data/gpkg/2.1_ChoiceSet_4283.gpkg")
 ```
 
 # Trip attribute data
@@ -73,14 +104,13 @@ dat <- spdat %>%
   filter(ActivityType %in% "Extractive") %>% 
   dplyr::select(TripID, PersonID, gridID_vis, BR, TripDate) %>% 
   distinct() %>% 
-  filter(BR %in% c("EsperanceBR", "BandyCreekBR")) %>% 
-  mutate(BR = ifelse(BR %in% "EsperanceBR", "65", "66")) %>% 
+  mutate(BR = ifelse(BR %in% "Hillarys", "104", NA),
+         BR = ifelse(BR %in% "Mindarie", "105", BR),
+         BR = ifelse(BR %in% "OceanReef", "106", BR),
+         BR = ifelse(BR %in% "TwoRocks", "112", BR)) %>% 
   mutate(UseLong = st_coordinates(.)[,1]) %>% 
   mutate(UseLat = st_coordinates(.)[,2]) %>% 
-  as.data.frame() # %>% 
-  # mutate(Line = ifelse(FishingType %in% c("Demersal", "Casting", "Squdding"), 1, 0)) %>% 
-  # mutate(Troll = ifelse(FishingType %in% "Trolling", 1, 0)) %>% 
-  # mutate(Dive = ifelse(FishingType %in% c("Cray", "Scuba", "Diving", "Spearing"), 1, 0))
+  as.data.frame()
 
 # which(is.na(dat$gridID_vis)==TRUE)
 # this chunk should give you a data set with one trip per row, with a few trip/fisher attributes and the ID of visited grids 
@@ -88,17 +118,17 @@ dat <- spdat %>%
 
 # Join data
 ```{r join}
-# og_dat <- dat # copying original data test join
+og_dat <- dat # copying original data test join
 
 dat <- inner_join(dat, sites, by = "BR") # FALSE
 
 # testing join
-# a <- as.data.frame(table(og_dat$BR)) %>% rename(launches = Freq)
-# b <- as.data.frame(table(sites$BR)) %>%  rename(sites_within_100km = Freq)
-# c <- left_join(a, b)
-# c$times <- c$launches*c$sites_within_100km
-# test = sum(c$times)
-# test == nrow(dat) # this should be TRUE
+a <- as.data.frame(table(og_dat$BR)) %>% rename(launches = Freq)
+b <- as.data.frame(table(sites$BR)) %>%  rename(sites_within_100km = Freq)
+c <- left_join(a, b)
+c$times <- c$launches*c$sites_within_100km
+test = sum(c$times)
+test == nrow(dat) # this should be TRUE
 ```
 
 # Choice and travel cost ($0.54/km)
@@ -114,26 +144,5 @@ dat <- dat %>%
 
 # Save output
 ```{r save}
-write_csv(dat, "./ignore/02_data/2.1_scbio.csv")
-```
-
-# Wrangling number of trips from boat ramp data
-This data (BRtrips) was from Matts national RUM. It was made by...
-
-   - Getting the annual number of boat launches for South Coast
-   - Calculate the proportion of launches that would happen each month
-   - Applying a gravity function to the monthly proportions. Lets calculates the estimated number of launches      per boat ramp given their populations. There are some issues with this, for example, Exmouth marina           would should more trips than Tanatbiddi because it closer proximity to a population hub, same for             Esperanace and Bandy Creek.
-   - The increasing number in the columns represents a change in the assumptions of the gravity function. The      higher the number the more the boat ramps interfere with each other given there proximity together. 
-
-```{r}
-BRtrips <- read.csv("./ignore/02_data/scBRdat.csv") %>% 
-  dplyr::select(Ramp_name, RampID, Month, TRIPS_ramp_prop_Grvt__5, upp_TRIPS_Grvt__5, low_TRIPS_Grvt__5) %>% 
-  group_by(RampID, Ramp_name) %>%
-  summarize(across(where(is.numeric), list(sum), .names = "{.col}")) # summing across months to get annual estimates
-
-BRtrips <- left_join(BRtrips, BR, by = c("RampID")) %>% # join to geometry
-  st_as_sf()
-
-write_csv(BRtrips, "./ignore/02_data/2.1_scBRtrips.csv")
-saveRDS(BRtrips, "./data/gpkg/2.1_scBRtrips.gpkg")
+write_csv(dat, "./data/02_data/2.1_dat.csv")
 ```
