@@ -17,21 +17,21 @@ library(sf)
 library(patchwork)
 
 # data
-dat <- readRDS("./data/gpkg/2.1_scbioChoiceSet_4283.gpkg") # this is the generalised data with static site attributes
-BRtrips <- readRDS("./data/gpkg/2.1_scBRtrips.gpkg") # This is produced by the "TripAllocation.R" script (Matt)
+dat <- readRDS("./data/gpkg/2.1_ChoiceSet_4283.gpkg") # this is the generalised data with static site attributes
+BRtrips <- readRDS("./data/gpkg/2.1_BRtrips.gpkg") # This is produced by the "TripAllocation.R" script (Matt)
 
 # Data with coefficients from model using trip data
-b <- read_excel("./ignore/03_data/mod.xlsx") %>% dplyr::select(Vars, Coef)
+b <- read_excel("./data/03_data/mod.xlsx") %>% dplyr::select(Vars, Coef)
  
 # covariance matrix
-v <- read_excel("./ignore/03_data/mod.xlsx", sheet = "v", col_names = rep("x", 8)) %>% 
+v <- read_excel("./data/03_data/mod.xlsx", sheet = "v", col_names = rep("x", 8)) %>% 
   dplyr::select(-x...1 ) %>% 
   distinct()
 
 # Plotting
-mp <- st_read("./data/gpkg/pscmpPort_4326.gpkg")
-mp_bbox <- st_read("./data/gpkg/pscmpBbox_4326.gpkg")
-NPZ <- st_read("./data/gpkg/scCommNP_4283.gpkg")
+mp <- st_read("./data/gpkg/pmmp_4326.gpkg")
+# mp_bbox <- st_read("./data/gpkg/pscmpBbox_4326.gpkg")
+NPZ <- st_read("./data/gpkg/ntz_4283.gpkg")
 
 grid <- dat %>% as.data.frame() %>% 
   distinct(gridID_alt, .keep_all = TRUE) %>% 
@@ -59,8 +59,12 @@ Aim is to have matrix with same row names and column names
 ```{r rearrange, include = FALSE}
 # removing 0b.fisl_adj as it filled all with zeros? find better way to do it
     colnames(v) <- c("vars", v$x...2)
-    v %<>% dplyr::select(-vars)
+  
+    v <- v[-6,] %>% 
+      dplyr::select(-c(vars, o.fshelter))
+      
     vars <- b$Vars #use
+    b <- b[-6,]
 # nrow(b) == length(v) # should be true
 # length(v) == nrow(v) # should be true
 ```
@@ -99,7 +103,7 @@ We expect recreator  (i) to choose the site (j) with the highest expected utilit
 
 ```{r utility, include = FALSE}
 # define vars used in RUM
-    vars <- c("travelCost", "Depth", "arealog", "km_mainland", "isl_adj", "shelter")
+    vars <- c("travelCost", "Depth", "arealog", "km_mainland", "isl_adj")
     
 # turn defined vars into matrix from dat, make sure there is no geometry
     rum_matrix <- as.matrix(dat[, vars]) 
@@ -141,7 +145,7 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
     npz <- dat %>%  filter(NPZ == 1)
 
     Vj[Vj$ID %in% npz$gridID_alt, cols] <- 0
-    p <- Vj[ , lapply(.SD, f1), by = br, .SDcols = c(cols, "ID")] 
+    p <- Vj[ , lapply(.SD, f1), by = br, .SDcols = c(cols, "ID")] # TODO
     p <- p[order(br, ID)]
     dat %<>% arrange(BR, gridID_alt)
     table(dat$gridID_alt == p$ID) # this should all be true (they do now)
@@ -168,16 +172,16 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
 # Sim 1
 ```{r closures, include = FALSE}
 # Assign closures
-sim4 <- st_read("./data/gpkg/sims/scSim4_4283.gpkg")
+sim <- st_read("./data/gpkg/Sim 1.gpkg")
 
     # sims <- list.files("./data/gpkg/sims/") 
 
-ntz <- c(sim4$gridID_alt)
+ntz <- c(sim$gridID_alt)
 # Calculate probability of visit and logsums: post-simulation
     
     Vj[Vj$ID %in% npz$gridID_alt, cols] <- 0
     Vj[Vj$ID %in% ntz, cols] <- 0
-    p <- Vj[ , lapply(.SD, f1), by = br, .SDcols = c(cols, "ID")]
+    p <- Vj[ , lapply(.SD, f1), by = br, .SDcols = c(cols, "ID")] # TODO
     p <- p[order(br, ID)]
     dat %<>% arrange(BR, gridID_alt)
     table(dat$gridID_alt == p$ID) # should all be true

@@ -23,8 +23,6 @@ dat <- read_csv("data/01_data/1.2_dat.csv") %>% filter(ActivityType == "Extracti
 BR <- st_read("./data/gpkg/BR_4283.gpkg") %>%  dplyr::select(RampID) # boat ramps
 
 sf_use_s2(FALSE)
-
-a <- unique(dat$PersonID)
 ```
 
 # Wrangling number of trips from boat ramp data
@@ -54,8 +52,6 @@ BRtrips <- left_join(BRtrips, BR, by = c("RampID")) %>% # join to geometry
 
 write_csv(BRtrips, "./data/02_data/2.1_BRtrips.csv")
 saveRDS(BRtrips, "./data/gpkg/2.1_BRtrips.gpkg")
-
-b <- unique(dat$PersonID)
 ```
 
 
@@ -80,8 +76,6 @@ choice <- sites %>% dplyr::select(gridID_alt, geom)
 st_write(choice, "./data/gpkg/2.1_ChoiceSetQ_4283.gpkg", append = FALSE) # need to write with st_write to open in QGISRUMs
 
 saveRDS(sites, "./data/gpkg/2.1_ChoiceSet_4283.gpkg")
-
-c <- unique(dat$PersonID)
 ```
 
 # Trip attribute data
@@ -92,7 +86,6 @@ dat <- dat %>%
   slice(which.max(decDuration)) %>% 
   ungroup()
 # which(duplicated(dat$TripID) == TRUE) # Should be none
-d <- unique(dat$PersonID)
 
 # add gridID_vis
 # making use data spatial 
@@ -103,8 +96,6 @@ spdat <- dat %>%
 # allocating sites to grids
 spdat <- spdat %>%
   st_join(gridID_vis, left = T, join = st_intersects)
-
-e <- unique(dat$PersonID)
 
 # selecting attributes, and tidying
 dat <- spdat %>% 
@@ -123,8 +114,6 @@ dat <- spdat %>%
 
 # which(is.na(dat$gridID_vis)==TRUE)
 # this chunk should give you a data set with one trip per row, with a few trip/fisher attributes and the ID of visited grids 
-# 
-f <- unique(dat$PersonID)
 ```
 
 # Join data
@@ -141,11 +130,9 @@ c$times <- c$launches*c$sites_within_100km
 test = sum(c$times)
 test == nrow(dat) # this should be TRUE
 
-g <- unique(dat$PersonID)
-
-ggplot()+
-  geom_sf(data = sites) +
-  geom_sf(data = dat$geometry)
+# ggplot()+
+#   geom_sf(data = sites) +
+#   geom_sf(data = dat$geometry)
 ```
 
 # Choice and travel cost ($0.54/km)

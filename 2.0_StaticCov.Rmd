@@ -26,7 +26,7 @@ source("./functions/spatialFunc.R") # spatial functions
 BR <- st_read("./data/gpkg/BR_4283.gpkg") # boat ramps
 coast <- st_read("./data/gpkg/Coast_4283.gpkg") # coast
 # habitat <- st_read("./data/gpkg/espHabitat_4283.gpkg") # habitat
-sites <- st_read("./data/gpkg/Sites_4326.gpkg") %>%  st_transform(4283)# MVM grid
+sites <- st_read("./data/gpkg/Sites_3857.gpkg") %>%  st_transform(4283)# MVM grid
 studySite <- st_read("./data/gpkg/StudySite_4283.gpkg") # study site (mega mvm polygon)
 # artInfra <- st_read("./data/gpkg/espArtInfra_4283.gpkg")
 shelter <- st_read("./data/gpkg/shelter_4283.gpkg")
