@@ -12,8 +12,7 @@ library(rgeos)
 library(rgdal)
 library(sf)
 library(googledrive)
-library(units)
-library(nngeo)
+library(units)binRecalibrary(nngeo)
 library(magrittr)
 
 # data
