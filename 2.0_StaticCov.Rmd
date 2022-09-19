@@ -29,13 +29,20 @@ coast <- st_read("./data/gpkg/Coast_4283.gpkg") # coast
 sites <- st_read("./data/gpkg/Sites_3857.gpkg") %>%  st_transform(4283)# MVM grid
 studySite <- st_read("./data/gpkg/StudySite_4283.gpkg") # study site (mega mvm polygon)
 # artInfra <- st_read("./data/gpkg/espArtInfra_4283.gpkg")
-shelter <- st_read("./data/gpkg/shelter_3587.gpkg")
+shelter <- st_read("./data/gpkg/shelter_3857.gpkg")
 NPZ <- st_read("./data/gpkg/ntz_4283.gpkg") # commonwealth and current state NTZ
 
 ### raster - ESPG 4326 (WGS84)
 bathy <- raster("./data/raster/bathy_4326.tif") # bathy
 
 sf_use_s2(FALSE)
+
+# make sure all layers overlap
+# ggplot()+
+#   geom_sf(data = sites, lwd = 0.05) +
+#   geom_sf(data = shelter, fill = 'red', colour = 'red') +
+#   geom_sf(data = BR) +
+#   geom_sf(data = NPZ)
 ```
 
 # Static Variables
