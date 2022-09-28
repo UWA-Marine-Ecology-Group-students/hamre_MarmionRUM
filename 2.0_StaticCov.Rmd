@@ -69,6 +69,16 @@ sites <- sites %>%
   st_make_valid()
 ```
 
+# shelter 
+Needs to be done before you manipulate IDs
+```{r}
+sites$shelter <- ifelse(sites$id %in% shelter$id, 1, 0)
+
+# ggplot() +
+#   geom_sf(data = sites, aes(fill = shelter), lwd = 0.05)
+```
+
+
 ## Depth
 Calculates the average depth within each grid cell (site). This does work is after grid manipulation.  
 
@@ -125,7 +135,7 @@ coast$area <- as.numeric(set_units(st_area(coast), km^2)) # area of polygons in 
 # Distance from mainland
 ## extracting mainland from coast polygon
 mainland <- coast %>% 
-  arrange(desc(area))  %>% 
+  arrange(desc(area)) %>% 
   slice(1)
 
 # ## calculate distance form mainland
@@ -145,7 +155,7 @@ waterGrid %<>%
 
 # ggplot() +
 #   geom_sf(data = waterGrid, aes(fill = km_mainland))
-#   
+# 
 # ggplot()+
 #   geom_sf(data = waterGrid, aes(fill = isl_adj))
 ```
@@ -163,20 +173,24 @@ Calculating the Southerly and Easterly fetch from the centroid of all polygons o
 ## Shelter
 Fetch was too computationally heavy for my time scale, so i've made a shape file with all the grids that have shelter present.
 ```{r}
-shelter <- shelter %>% st_transform(crs(coast))
-waterShelter <- st_difference(shelter, st_combine(coast)) # isolate
-
-shelter_grids <- as.data.frame(st_equals(waterGrid, waterShelter, sparse = FALSE))
-
-shelter_grids <- shelter_grids %>%
-  rowwise %>%
-  mutate(shelter = if_any(.cols = contains('V'), isTRUE)) %>%
-  ungroup
-
-waterGrid <- waterGrid %>%
-  mutate(shelter = ifelse(shelter_grids$shelter %in% TRUE, 1, 0))
+# shelter <- shelter %>% st_transform(crs(coast))
+# waterShelter <- st_difference(shelter, st_combine(coast)) # isolate
+# 
 # ggplot() +
-#   geom_sf(data = waterGrid, aes(fill = shelter))
+#   geom_sf(data = waterShelter)
+
+# shelter_grids <- as.data.frame(st_within(waterGrid, waterShelter, sparse = FALSE))
+# 
+# shelter_grids <- shelter_grids %>%
+#   rowwise %>%
+#   mutate(shelter = if_any(.cols = contains('V'), isTRUE)) %>%
+#   ungroup
+# 
+# waterGrid <- waterGrid %>%
+#   mutate(shelter = ifelse(shelter_grids$shelter %in% TRUE, 1, 0))
+
+# ggplot() +
+#   geom_sf(data = waterGrid, aes(fill = shelter), lwd = 0.05)
 ```
 
 ## Commonwealth NPZ
@@ -188,8 +202,9 @@ npz_grids <- as.list(st_intersects(waterGrid, npz, sparse = FALSE))
 
 waterGrid <- waterGrid %>% 
   mutate(NPZ = ifelse(npz_grids == TRUE, 1, 0))
+
 # ggplot() +
-#   geom_sf(data = waterGrid, aes(fill = NPZ))
+#   geom_sf(data = waterGrid, aes(fill = NPZ), lwd = 0.05)
 ```
 
 # Distance to BR

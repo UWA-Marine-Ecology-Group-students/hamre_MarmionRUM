@@ -13,11 +13,15 @@ library(dplyr)
 library(data.table)
 library(gtable)
 library(gridExtra)
+library(sp)
+library(raster)
+library(rgeos)
+library(rgdal)
 library(sf)
 library(patchwork)
 
 # data
-dat <- readRDS("./data/gpkg/2.1_ChoiceSet_4283.gpkg") # this is the generalised data with static site attributes
+dat <- readRDS("./data/gpkg/2.1_ChoiceSet_4283.gpkg")  # this is the generalised data with static site attributes
 BRtrips <- readRDS("./data/gpkg/2.1_BRtrips.gpkg") # This is produced by the "TripAllocation.R" script (Matt)
 
 # Data with coefficients from model using trip data
@@ -59,12 +63,8 @@ Aim is to have matrix with same row names and column names
 ```{r rearrange, include = FALSE}
 # removing 0b.fisl_adj as it filled all with zeros? find better way to do it
     colnames(v) <- c("vars", v$x...2)
-  
-    v <- v[-6,] %>% 
-      dplyr::select(-c(vars, o.fshelter))
-      
+    v %<>% dplyr::select(-vars)
     vars <- b$Vars #use
-    b <- b[-6,]
 # nrow(b) == length(v) # should be true
 # length(v) == nrow(v) # should be true
 ```
@@ -74,8 +74,7 @@ Need to transform data in choice ste to match transformations used in model
 ```{r transformations, include = FALSE}
 dat <- dat %>% 
   mutate(depthsquared = Depth*Depth) %>% 
-  mutate(arealog = log(area)) %>% 
-  mutate(arealog = ifelse(is.infinite(arealog), 0, arealog)) %>% 
+  mutate(arealog = log(as.numeric(area) + 1)) %>%
   st_drop_geometry() %>%
   as.data.frame()
 ```
@@ -103,7 +102,7 @@ We expect recreator  (i) to choose the site (j) with the highest expected utilit
 
 ```{r utility, include = FALSE}
 # define vars used in RUM
-    vars <- c("travelCost", "Depth", "arealog", "km_mainland", "isl_adj")
+     vars <- c("travelCost", "Depth", "arealog", "km_mainland", "isl_adj", "shelter")
     
 # turn defined vars into matrix from dat, make sure there is no geometry
     rum_matrix <- as.matrix(dat[, vars]) 
@@ -145,7 +144,7 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
     npz <- dat %>%  filter(NPZ == 1)
 
     Vj[Vj$ID %in% npz$gridID_alt, cols] <- 0
-    p <- Vj[ , lapply(.SD, f1), by = br, .SDcols = c(cols, "ID")] # TODO
+    p <- Vj[ , lapply(.SD, f1), by = br, .SDcols = c(cols, "ID")] 
     p <- p[order(br, ID)]
     dat %<>% arrange(BR, gridID_alt)
     table(dat$gridID_alt == p$ID) # this should all be true (they do now)
@@ -160,7 +159,7 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
 # Calculates probability of visit summary statistics by row. This is the base probability of each site, for each trip and the error. 
 # For each site p has 100 estimates of the p of visiting that site me give me tyhe average, median, ci..
 
-    dat$p.mean_base <- rowQuantiles(p, probs = 0.5) # median
+    dat$p.mean_base <- rowMeans(p) # median
     dat$p.low_base <- rowQuantiles(p, probs = sqrt(0.025)) # lower ci
     dat$p.upp_base <- rowQuantiles(p, probs = 1 - sqrt(0.025)) # upper ci 
     
@@ -195,7 +194,7 @@ ntz <- c(sim$gridID_alt)
     
 # Calculates probability of visit summary statistics by row. This is the simulated probability of each site, for each trip and the error. 
 
-    dat$p.mean_sim <- rowQuantiles(p, probs = 0.5)
+    dat$p.mean_sim <- rowMeans(p)
     dat$p.low_sim <- rowQuantiles(p, probs = sqrt(0.025)) #saving outputs back to p
     dat$p.upp_sim <- rowQuantiles(p, probs = 1 - sqrt(0.025)) #Note below about weird probs
 ```
@@ -209,7 +208,7 @@ ntz <- c(sim$gridID_alt)
 
 # Summaries across draws
     W <- as.matrix(W)
-    logsum_sim$w.mean <- rowQuantiles(W, probs = 0.5)
+    logsum_sim$w.mean <- rowMeans(W)
     logsum_sim$w.low <- rowQuantiles(W, probs = sqrt(0.025)) 
     logsum_sim$w.upp <- rowQuantiles(W, probs = 1 - sqrt(0.025))
     
@@ -219,12 +218,12 @@ ntz <- c(sim$gridID_alt)
 
     # # Welfare impact of closure
     W_impact_trip <- logsum_sim %>%
-      summarise("Annual mean welfare impact per trip ($)" = round(sum(w.mean), 2),
-                "Annual upper welfare impact per trip ($)" = round(sum(w.low), 2),
-                "Annual lower welfare impact per trip ($)" = round(sum(w.upp), 2))
+      summarise("Annual lower welfare impact per trip ($)" = round(sum(w.low), 2),
+                "Annual mean welfare impact per trip ($)" = round(sum(w.mean), 2),
+                "Annual upper welfare impact per trip ($)" = round(sum(w.upp), 2))
 
     W_impact_trip
-    png("./plots/sim4.W_impact_trip.png", height = 50*nrow(W_impact_trip), width = 200*ncol(W_impact_trip))
+    png("./plots/sim1.W_impact_trip.png", height = 50*nrow(W_impact_trip), width = 200*ncol(W_impact_trip))
     grid.table(W_impact_trip)
     dev.off()
 
@@ -278,7 +277,7 @@ the probability of visiting each grid (by annually) given a particular boat ramp
                              across(starts_with("low_TRIPS"), ~.x*p.low_base, .names = "low_base_{.col}" ))
 
 # Sum by grid (over ramps) to get use at grid level
-      RUM_grid <- RUM %>% group_by(gridID_alt, BR, Ramp_name) %>%  # was just grouping by ID
+      RUM_grid <- RUM %>% group_by(gridID_alt) %>%  # was just grouping by ID
       summarise(across(starts_with(c("mean_sim_","upp_sim_","low_sim_","mean_base_", "upp_base_", 
                                      "low_base_")), sum))
 # join it to geometry
@@ -287,59 +286,81 @@ the probability of visiting each grid (by annually) given a particular boat ramp
 
 # Welfare impacts
 ```{r totW, include = FALSE}
-W_impact <- RUM_W %>% summarise(round(across(starts_with(c("welf_mean","welf_upp","welf_low")), sum)))
+W_impact <- RUM_W %>% summarise(round(across(starts_with(c("welf_low", "welf_mean","welf_upp")), sum)))
 
-W_impact %<>%  rename("Annual mean welfare impact ($)" = welf_mean_TRIPS_ramp_prop_Grvt__5,
-                        "Annual upper welfare impact ($)" = welf_upp_upp_TRIPS_Grvt__5,
-                        "Annual lower welfare impact ($)" = welf_low_low_TRIPS_Grvt__5)
+W_impact %<>%  rename("Annual lower welfare impact ($)" = welf_low_low_TRIPS_Grvt__5,
+                      "Annual mean welfare impact ($)" = welf_mean_TRIPS_ramp_prop_Grvt__5,
+                      "Annual upper welfare impact ($)" = welf_upp_upp_TRIPS_Grvt__5)
 
 W_impact
-png("./plots/sim4.W_impact.png", height = 50*nrow(W_impact), width = 200*ncol(W_impact))
+png("./plots/sim.W_impact.png", height = 50*nrow(W_impact), width = 200*ncol(W_impact))
 grid.table(W_impact)
 dev.off()
 ```
 
 ```{r sc_spimpact, include = FALSE}
 # add planning area and crop to it
-mp_bbox %<>% st_transform(crs(RUM_grid))
-mpbr <- as.data.frame(st_intersects(BRtrips, mp_bbox, sparse = FALSE))
-BRtrips$mpbr <- mpbr$V1
-sp_mpbr <- BRtrips %>% filter(mpbr == TRUE)
-mpbr <- sp_mpbr$RampID
+# mp_bbox <- st_read("./data/gpkg/StudySite_4283.gpkg") %>% st_transform(crs(RUM_grid))
+# mpbr <- as.data.frame(st_intersects(BRtrips, mp_bbox, sparse = FALSE))
+# BRtrips$mpbr <- mpbr$V1
+# sp_mpbr <- BRtrips %>% filter(mpbr == TRUE)
+# mpbr <- sp_mpbr$RampID
+# 
+# # bbox <- RUM_grid %>% filter(BR %in% mpbr)
+# 
+RUM_grid %<>%
+     mutate(mean_diff = mean_sim_TRIPS_ramp_prop_Grvt__5 - mean_base_TRIPS_ramp_prop_Grvt__5,
+            upp_diff = upp_sim_upp_TRIPS_Grvt__5 - upp_base_upp_TRIPS_Grvt__5,
+            low_diff = low_sim_low_TRIPS_Grvt__5 - low_base_low_TRIPS_Grvt__5)
+# 
+# bbox <- RUM_grid %>% st_crop(mp_bbox)
+# mp %<>% st_transform(crs(bbox))
+# mp_crop <- mp %>% st_crop(bbox)
+# mp_comm <- NPZ %>% st_crop(bbox)
 
-bbox <- RUM_grid %>% filter(BR %in% mpbr)
-mp_crop <- mp %>% st_crop(bbox)
-mp_comm <- NPZ %>% st_crop(bbox)
-
-presim <- ggplot(bbox) +
+presim <- ggplot(RUM_grid) +
       xlab("Longitude") + ylab("Latitude") +
       geom_sf(aes(fill = mean_base_TRIPS_ramp_prop_Grvt__5), lwd = 0.05) +
       scale_fill_distiller(palette = "YlGnBu", direction = 1) +
       labs(fill = "Trips\nannually") +
   my_theme +
   ggtitle(" Pre-simulation ") +
-  geom_sf(data = mp_crop, alpha = 0, lwd = 0.25) +
-  geom_sf(data = mp_comm, alpha = 0, lwd = 0.25) +
+  geom_sf(data = mp, alpha = 0, lwd = 0.25) +
+  geom_sf(data = NPZ, alpha = 0, lwd = 0.25) +
   geom_sf(data = sp_mpbr, color = 'red', fill = 'red', size = 0.5)
 
-ggsave(path = "./plots", filename = paste("sim4.presim.png", sep = ''), plot = presim, width = 8, height = 4)
+ggsave(path = "./plots", filename = paste("sim1.presim.png", sep = ''), plot = presim, width = 8, height = 4)
 
-postsim <- ggplot(bbox) +
+postsim <- ggplot(RUM_grid) +
       xlab("Longitude") + ylab("Latitude") +
       geom_sf(aes(fill = mean_sim_TRIPS_ramp_prop_Grvt__5), lwd = 0.05) +
       scale_fill_distiller(palette = "YlGnBu", direction = 1) +
       labs(fill = "Trips\nannually") +
-  geom_sf(data = sim4, fill = 'black') +
+  geom_sf(data = sim, fill = 'black') +
   my_theme +
    ggtitle(" Post-simulation ") +
-  geom_sf(data = mp_crop, alpha = 0, lwd = 0.25) +
-  geom_sf(data = mp_comm, alpha = 0, lwd = 0.25) +
+  geom_sf(data = mp, alpha = 0, lwd = 0.25) +
+  geom_sf(data = NPZ, alpha = 0, lwd = 0.25) +
   geom_sf(data = sp_mpbr, color = 'red', fill = 'red', size = 0.5)
 
-ggsave(path = "./plots", filename = paste("sim4.postsim.png", sep = ''), width = 8, height = 4)
+ggsave(path = "./plots", filename = paste("sim1.postsim.png", sep = ''), width = 8, height = 4)
+
+diff <- ggplot(RUM_grid) +
+      xlab("Longitude") + ylab("Latitude") +
+      geom_sf(aes(fill = mean_diff), lwd = 0.05) +
+      scale_fill_distiller(palette = "YlGnBu", direction = -1) +
+      labs(fill = "Change in\nannual trips") +
+      my_theme +
+    geom_sf(data = mp, alpha = 0, lwd = 0.25) +
+    geom_sf(data = NPZ, alpha = 0, lwd = 0.25) +
+  geom_sf(data = sp_mpbr, color = 'red', fill = 'red', size = 0.5) +
+  geom_sf(data = sim, lwd = 0.05, fill = "black")
+
+ggsave(path = "./plots", filename = paste("sim1.diff.png", sep = ''), width = 8, height = 4)
 
 presim
 postsim
+diff
 ```
 
 ## Welfare impacts per boat ramp
@@ -347,7 +368,7 @@ postsim
 RUM_W$BR <- as.factor(RUM_W$BR)
 
 W_BRimpact <- RUM_W %>% group_by(BR, Ramp_name) %>%
-      summarise(round(across(starts_with(c("welf_mean","welf_upp","welf_low")), sum))) %>% 
+      summarise(round(across(starts_with(c("welf_low", "welf_mean","welf_upp")), sum))) %>% 
   filter(welf_mean_TRIPS_ramp_prop_Grvt__5 > 0)
 
 W_BRimpact_bar <- W_BRimpact %>%
@@ -361,88 +382,88 @@ W_BRimpact_bar <- W_BRimpact %>%
   xlab("Boat Ramp")
 
 W_BRimpact_bar
-ggsave(path = "./plots", filename = paste("sim4.W_BRimpact_bar.png", sep = ''), plot = W_BRimpact_bar, width = 8, height = 4)
+ggsave(path = "./plots", filename = paste("sim1.W_BRimpact_bar.png", sep = ''), plot = W_BRimpact_bar, width = 8, height = 4)
 
 
-W_BRimpact %<>%  rename("Annual mean welfare impact ($)" = welf_mean_TRIPS_ramp_prop_Grvt__5,
-                        "Annual upper welfare impact ($)" = welf_upp_upp_TRIPS_Grvt__5,
-                        "Annual lower welfare impact ($)" = welf_low_low_TRIPS_Grvt__5)
+W_BRimpact %<>%  rename("Annual lower welfare impact ($)" = welf_low_low_TRIPS_Grvt__5,
+                        "Annual mean welfare impact ($)" = welf_mean_TRIPS_ramp_prop_Grvt__5,
+                        "Annual upper welfare impact ($)" = welf_upp_upp_TRIPS_Grvt__5)
 
 W_BRimpact
-png("./plots/sim4.W_BRimpact.png", height = 50*nrow(W_BRimpact), width = 150*ncol(W_BRimpact))
+png("./plots/sim1.W_BRimpact.png", height = 50*nrow(W_BRimpact), width = 150*ncol(W_BRimpact))
 grid.table(W_BRimpact)
 dev.off()
 ```
 
 ```{r}
-for (i in W_BRimpact$BR) {
-  br <- BRtrips %>% filter(RampID %in% i)
-  bbox <- RUM_grid %>%  filter(BR %in% i)
-  mp_crop <- mp %>% st_crop(bbox)
-  mp_comm <- NPZ %>% st_crop(bbox)
-  
-presim <- RUM_grid %>% filter(BR == i) %>% 
-    ggplot(.) +
-      xlab("Longitude") + ylab("Latitude") +
-      geom_sf(aes(fill = mean_base_TRIPS_ramp_prop_Grvt__5), lwd = 0.05) +
-      scale_fill_distiller(palette = "YlGnBu", direction = 1) +
-      labs(fill = "Trips\nannually") +
-      my_theme +
-    geom_sf(data = mp_crop, alpha = 0, lwd = 0.25) +
-  geom_sf(data = mp_comm, alpha = 0, lwd = 0.25) +
-      ggtitle(paste(br$Ramp_name, " pre-simulation ")) +
-    geom_sf(data = br, color = 'red', fill = 'red', size = 1)
-
-ggsave(path = "./plots", filename = paste("sim4.", br$Ramp_name,"_presim.png", sep = ''), plot = presim, width = 8, height = 4)
-print(presim)
-
-sim <- RUM_grid %>% filter(BR == i & gridID_alt %in% ntz)
-
-postsim <- RUM_grid %>% filter(BR == i) %>%
-ggplot(.) +
-      xlab("Longitude") + ylab("Latitude") +
-      geom_sf(aes(fill = mean_sim_TRIPS_ramp_prop_Grvt__5), lwd = 0.05) +
-      scale_fill_distiller(palette = "YlGnBu", direction = 1) +
-      labs(fill = "Trips\nannually") +
-  geom_sf(data = mp_crop, alpha = 0, lwd = 0.25) +
-  geom_sf(data = mp_comm, alpha = 0, lwd = 0.25) +
-  geom_sf(data = br, color = 'red', fill = 'red', size = 1) +
-  geom_sf(data = sim, fill = "black", lwd = 0.05) +
-  ggtitle(paste(br$Ramp_name, " post-simulation")) +
-  my_theme
-
-ggsave(path = "./plots", filename = paste("sim4.", br$Ramp_name,"_postsim.png", sep = ''), plot = postsim, width = 8, height = 4)
-print(postsim)
-}
+# for (i in W_BRimpact$BR) {
+#   br <- BRtrips %>% filter(RampID %in% i)
+# bbox <- RUM_grid %>%  filter(BR %in% i)
+# mp_crop <- mp %>% st_crop(bbox)
+# mp_comm <- NPZ %>% st_crop(bbox)
+# 
+# presim <- RUM_grid %>% filter(BR == i) %>%
+#     ggplot(.) +
+#       xlab("Longitude") + ylab("Latitude") +
+#       geom_sf(aes(fill = mean_base_TRIPS_ramp_prop_Grvt__5), lwd = 0.05) +
+#       scale_fill_distiller(palette = "YlGnBu", direction = 1) +
+#       labs(fill = "Trips\nannually") +
+#       my_theme +
+#     geom_sf(data = mp_crop, alpha = 0, lwd = 0.25) +
+#   geom_sf(data = mp_comm, alpha = 0, lwd = 0.25) +
+#   ggtitle(paste(br$Ramp_name, " pre-simulation ")) +
+#   geom_sf(data = br, color = 'red', fill = 'red', size = 1)
+# 
+# ggsave(path = "./plots", filename = paste("sim1.", br$Ramp_name,"_presim.png", sep = ''), plot = presim, width = 8, height = 4)
+# print(presim)
+# 
+# sim <- RUM_grid %>% filter(BR == i & gridID_alt %in% ntz)
+# 
+# postsim <- RUM_grid %>% filter(BR == i) %>%
+# ggplot(.) +
+#       xlab("Longitude") + ylab("Latitude") +
+#       geom_sf(aes(fill = mean_sim_TRIPS_ramp_prop_Grvt__5), lwd = 0.05) +
+#       scale_fill_distiller(palette = "YlGnBu", direction = 1) +
+#       labs(fill = "Trips\nannually") +
+#   geom_sf(data = mp_crop, alpha = 0, lwd = 0.25) +
+#   geom_sf(data = mp_comm, alpha = 0, lwd = 0.25) +
+#   geom_sf(data = br, color = 'red', fill = 'red', size = 1) +
+#   geom_sf(data = sim, fill = "black", lwd = 0.05) +
+#   ggtitle(paste(br$Ramp_name, " post-simulation")) +
+#   my_theme
+# 
+# ggsave(path = "./plots", filename = paste("sim1.", br$Ramp_name,"_postsim.png", sep = ''), plot = postsim, width = 8, height = 4)
+# print(postsim)
+# }
 ```
 
 ```{r difference plots}
-RUM_grid %<>%
-     mutate(mean_diff = mean_sim_TRIPS_ramp_prop_Grvt__5 - mean_base_TRIPS_ramp_prop_Grvt__5,
-            upp_diff = upp_sim_upp_TRIPS_Grvt__5 - upp_base_upp_TRIPS_Grvt__5,
-            low_diff = low_sim_low_TRIPS_Grvt__5 - low_base_low_TRIPS_Grvt__5)
-
-for (i in W_BRimpact$BR) {
-  br <- BRtrips %>% filter(RampID %in% i)
-  bbox <- RUM_grid %>%  filter(BR %in% i)
-  mp_crop <- mp %>% st_crop(bbox)
-  mp_comm <- NPZ %>% st_crop(bbox)
-  sim <- RUM_grid %>% filter(BR == i & gridID_alt %in% ntz)
-  
-diff <- RUM_grid %>% filter(BR == i) %>% 
-    ggplot(.) +
-      xlab("Longitude") + ylab("Latitude") +
-      geom_sf(aes(fill = mean_diff), lwd = 0.05) +
-      scale_fill_distiller(palette = "YlGnBu", direction = -1) +
-      labs(fill = "Change in\nannual trips") +
-      my_theme +
-    geom_sf(data = mp_crop, alpha = 0, lwd = 0.25) +
-    geom_sf(data = mp_comm, alpha = 0, lwd = 0.25) +
-      ggtitle(paste(br$Ramp_name)) +
-  # geom_sf(data = sim, fill = "black", lwd = 0.05) +
-    geom_sf(data = br, color = 'red', fill = 'red', size = 1)
-
-ggsave(path = "./plots", filename = paste("sim4.", br$Ramp_name,"_diff.png", sep = ''), plot = diff, width = 8, height = 4)
-print(diff)
-}
+# RUM_grid %<>%
+#      mutate(mean_diff = mean_sim_TRIPS_ramp_prop_Grvt__5 - mean_base_TRIPS_ramp_prop_Grvt__5,
+#             upp_diff = upp_sim_upp_TRIPS_Grvt__5 - upp_base_upp_TRIPS_Grvt__5,
+#             low_diff = low_sim_low_TRIPS_Grvt__5 - low_base_low_TRIPS_Grvt__5)
+# 
+# for (i in W_BRimpact$BR) {
+#   br <- BRtrips %>% filter(RampID %in% i)
+#   bbox <- RUM_grid %>%  filter(BR %in% i)
+#   mp_crop <- mp %>% st_crop(bbox)
+#   mp_comm <- NPZ %>% st_crop(bbox)
+#   sim <- RUM_grid %>% filter(BR == i & gridID_alt %in% ntz)
+#   
+# diff <- RUM_grid %>% filter(BR == i) %>%
+#     ggplot(.) +
+#       xlab("Longitude") + ylab("Latitude") +
+#       geom_sf(aes(fill = mean_diff), lwd = 0.05) +
+#       scale_fill_distiller(palette = "YlGnBu", direction = -1) +
+#       labs(fill = "Change in\nannual trips") +
+#       my_theme +
+#     geom_sf(data = mp_crop, alpha = 0, lwd = 0.25) +
+#     geom_sf(data = mp_comm, alpha = 0, lwd = 0.25) +
+#       ggtitle(paste(br$Ramp_name)) +
+#   geom_sf(data = sim, fill = "black", lwd = 0.05) +
+#     geom_sf(data = br, color = 'red', fill = 'red', size = 1)
+# 
+# ggsave(path = "./plots", filename = paste("sim1.", br$Ramp_name,"_diff.png", sep = ''), plot = diff, width = 8, height = 4)
+# print(diff)
+# }
 ```

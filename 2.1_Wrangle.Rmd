@@ -18,7 +18,7 @@ library(magrittr)
 
 # data
 ## gpkg - ESPG 4283 (GDA94)
-sites <- readRDS("./data/gpkg/2.0_Sites_4283.gpkg") # sites with static attributes
+sites <- readRDS("./data/gpkg/2.0_Sites_4283.gpkg") %>% filter(!is.na(Depth)) # sites with static attributes - checked the depth, some depths havent been calculated along lower edge, okay to filter, no recreation
 dat <- read_csv("data/01_data/1.2_dat.csv") %>% filter(ActivityType == "Extractive")
 BR <- st_read("./data/gpkg/BR_4283.gpkg") %>%  dplyr::select(RampID) # boat ramps
 

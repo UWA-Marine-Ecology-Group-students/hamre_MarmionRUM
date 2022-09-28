@@ -12,12 +12,12 @@
 **# set up
 * define directory  
 
-	cd "/Users/23088313/Documents/git_repos/hamre_esperanceRUM"
+	cd "/Users/23088313/Documents/git_repos/hamre_MarmionRUM"
 
 * read data 
 
 	clear
-	import delimited "ignore/02_data/2.1_scbio.csv"
+	import delimited "data/02_data/2.1_dat.csv"
 
 **# data prep 
 
@@ -76,7 +76,7 @@
 
 * storing new data 
 
-	export delimited using "ignore/03_data/3.0_scbio.csv", replace
+	export delimited using "data/03_data/3.0_dat.csv", replace
 
 **# model
 * use "#" for interaction, ## for full factorial interaction
@@ -105,7 +105,7 @@
 
 	* define directory  to store
 
-	cd "/Users/23088313/Documents/git_repos/hamre_esperanceRUM/ignore/03_data"
+	cd "/Users/23088313/Documents/git_repos/hamre_MarmionRUM/data/03_data"
 
 	putexcel set mod.xlsx, replace
 	putexcel A2 = matrix(b), rownames
