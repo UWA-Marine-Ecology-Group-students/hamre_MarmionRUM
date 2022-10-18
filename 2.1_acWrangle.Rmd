@@ -1,0 +1,170 @@
+Script to make AC grid for Marmion
+
+```{r setup}
+# knitr options
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE, fig.align = 'center', fig.width = 10, fig.height = 7) 
+
+# libraries 
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(sp)
+library(raster)
+library(rgeos)
+library(rgdal)
+library(sf)
+library(googledrive)
+library(units)
+library(nngeo)
+library(magrittr)
+
+# data
+sites <- st_read("./data/gpkg/ac_grid_4283.gpkg")
+BR <- st_read("./data/gpkg/BR_4283.gpkg") # boat ramps
+BRtrips <- readRDS("./data/gpkg/2.1_BRtrips.gpkg")
+
+dat <- read_csv("data/01_data/1.2_dat.csv") %>% filter(ActivityType == "Extractive") %>% 
+  filter(!is.na(UseLat), !is.na(UseLong)) %>% 
+  st_as_sf(coords = c("UseLong", "UseLat"), crs = 4283)
+
+
+# functions
+source("./functions/spatialFunc.R") # spatial functions
+```
+
+# Prep data
+```{r}
+# Site daat (AC grid)
+sites <- sites %>% 
+  mutate(SZ = ifelse(SZ1 %in% 1, 1, 
+                     ifelse(SZ2 %in% 1, 1,
+                            ifelse(SZ3 %in% 1, 1, 
+                                   ifelse(SZ4 %in% 1, 1,
+                                          ifelse(SZ5 %in% 1, 1, 0)))))) %>% # binary SZ  var
+  mutate(gridID = row_number()) # adding unique ID
+  
+site_centroid <- st_centroid_within_poly(sites) # gets centroid of every grid cell
+sites$site_centroid <- site_centroid$geom # appending centroid
+
+# getting distance from each boat rampe to the centroid of the sites
+BR <- st_transform(BR, crs(sites))
+dist <- as.data.frame(set_units(st_distance(sites$site_centroid, BR), km)) 
+names(dist) <- unique(BR$RampID)
+gridID <- sites$gridID
+dist$gridID <- gridID
+dist <- dist %>% gather("BR", "site.centroid_km.BR", 1:length(dist) - 1) 
+sites <- sites %>% left_join(dist, by = "gridID") # join 
+
+sites <- sites |> st_sf() |> # wont work without st_sf()
+  rename(gridID_alt = gridID) %>%
+  dplyr::select(-site_centroid) 
+
+
+gridID_vis <- sites %>% 
+  dplyr::select(gridID_alt, geom) %>% 
+  distinct() 
+
+# check 
+# ggplot() +
+#   geom_sf(data = sites$geom, aes(fill = sites$SZ)) +
+#   geom_sf(data = sites$site_centroid, color = 'red')
+```
+
+
+```{r}
+# Use spatial points
+dat <- st_crop(dat, sites) # removing outliers
+
+# need one trip per row (longest site visited on trip)
+dat <- dat %>% 
+  group_by(PersonID, TripID) %>% 
+  slice(which.max(decDuration)) %>% 
+  ungroup()
+# which(duplicated(dat$TripID) == TRUE) # Should be none
+
+# allocating sites to grids
+dat <- dat %>%
+  st_join(gridID_vis, left = T, join = st_intersects)
+
+# selecting attributes, and tidying
+dat <- dat %>% 
+  rename(gridID_vis = gridID_alt) %>% 
+  dplyr::select(TripID, PersonID, gridID_vis, Site, TripDate) %>% 
+  distinct() %>% 
+  mutate(BR = ifelse(Site %in% "Hillarys", "104", NA),
+         BR = ifelse(Site %in% "Mindarie", "105", BR),
+         BR = ifelse(Site %in% "OceanReef", "106", BR),
+         BR = ifelse(Site %in% "TwoRocks", "112", BR)) %>% 
+  mutate(UseLong = st_coordinates(.)[,1]) %>% 
+  mutate(UseLat = st_coordinates(.)[,2]) %>% 
+  as.data.frame()
+
+# which(is.na(dat$gridID_vis)==TRUE)
+# this chunk should give you a data set with one trip per row, with a few trip/fisher attributes and the ID of visited grids 
+```
+
+# Join data
+```{r join}
+og_dat <- dat # copying original data test join
+
+dat <- inner_join(dat, sites, by = "BR") # FALSE
+
+# testing join
+a <- as.data.frame(table(og_dat$BR)) %>% rename(launches = Freq)
+b <- as.data.frame(table(sites$BR)) %>%  rename(sites_within_100km = Freq)
+c <- left_join(a, b)
+c$times <- c$launches*c$sites_within_100km
+test = sum(c$times)
+test == nrow(dat) # this should be TRUE
+
+# ggplot()+
+#   geom_sf(data = sites) +
+#   geom_sf(data = dat$geometry)
+```
+
+```{r}
+dat <- dat %>% 
+  st_as_sf()
+
+tmp <- dat %>%
+  group_by(gridID_vis, BR) %>%
+  summarise(use_centroid = st_union(geometry)) %>%
+  st_centroid() %>%
+  ungroup() %>%
+  as.data.frame()
+
+dat <- as.data.frame(dat)
+
+dat <- left_join(dat, tmp, by = c("BR", "gridID_vis"))
+
+# checking geometries
+# ggplot() +
+#   geom_sf(data = sites, lwd = 0.05) +
+#   geom_sf(data = dat, aes(shape = BR, color = as.factor(gridID))) +
+#   geom_sf(data = use_centroid, aes(shape = BR, color = as.factor(gridID)))
+```
+
+```{r}
+# find mean coordinates of use points within a site for each boat ramp
+# dist <- as.data.frame(set_units(st_distance(dat$use_centroid, BR), km)) 
+# names(dist) <- unique(BR$RampID)
+# gridID_vis <- dat$gridID_vis
+# dist$gridID_vis <- gridID_vis
+# dist <- dist %>% gather("BR", "use.centroid_km.BR", 1:length(dist) - 1) 
+# dat <- dat %>% left_join(dist, by = "gridID_vis") # join 
+```
+
+# Choice and travel cost ($0.54/km)
+```{r choice and travel cost}
+dat <- dat %>% 
+  # mutate(centroidLong = st_coordinates(polyCentroid)[,1]) %>% # need this is using dynamic variables
+  # mutate(centroidLat = st_coordinates(polyCentroid)[,2]) %>%
+  mutate(choice = ifelse(gridID_vis == gridID_alt, 1, 0)) %>% 
+  mutate(travelCost = as.numeric(0.54*site.centroid_km.BR))
+  # dplyr::select(-c(geom, geometry))
+```
+
+# Save output
+```{r save}
+write_csv(dat, "./data/02_data/2.1_acdat.csv")
+```

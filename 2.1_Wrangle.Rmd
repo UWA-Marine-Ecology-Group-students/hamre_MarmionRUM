@@ -54,8 +54,6 @@ write_csv(BRtrips, "./data/02_data/2.1_BRtrips.csv")
 saveRDS(BRtrips, "./data/gpkg/2.1_BRtrips.gpkg")
 ```
 
-
-
 # Make choice set
 ```{r choice set}
 # making choice set
@@ -73,10 +71,12 @@ gridID_vis <- sites %>%
 
 # Writing choice set to ID grids to close
 choice <- sites %>% dplyr::select(gridID_alt, geom)
+
 st_write(choice, "./data/gpkg/2.1_ChoiceSetQ_4283.gpkg", append = FALSE) # need to write with st_write to open in QGISRUMs
 
 saveRDS(sites, "./data/gpkg/2.1_ChoiceSet_4283.gpkg")
 ```
+
 
 # Trip attribute data
 ```{r trip attributes}
@@ -145,8 +145,13 @@ dat <- dat %>%
   dplyr::select(-c(geom, geometry))
 ```
 
-
 # Save output
 ```{r save}
 write_csv(dat, "./data/02_data/2.1_dat.csv")
 ```
+
+```{r}
+#  cor <- round(cor(dat[,c("Depth", "km_mainland", "isl_adj", "shelter", "Lhex", "Shex", "Mhex", "travelCost")], use='complete.obs'), 2)
+# cor
+```
+

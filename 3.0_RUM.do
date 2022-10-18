@@ -17,6 +17,7 @@
 * read data 
 
 	clear
+	**import delimited "data/02_data/2.1_dat.csv"
 	import delimited "data/02_data/2.1_dat.csv"
 
 **# data prep 
@@ -28,6 +29,9 @@
 	gen fisl_adj = isl_adj == 1
 	gen fchoice = choice == 1
 	gen fshelter = shelter == 1
+	* gen fcomhex = completehex == 1
+	* gen fsarea = smallarea == 1
+	* gen fmarea = medarea == 1
 	* gen fline = line == 1
 	* gen ftroll = troll == 1
 	* gen fdive = dive == 1
@@ -35,6 +39,7 @@
 * changing strings to factors
 
 	* encode resident, gen(fres)
+	encode hex, gen(fhex)
 
 * changing strings to numeric
 
@@ -73,10 +78,13 @@
 	* gen res_reef = fres*reef
 	* gen boat_tc = boatlength*travelcost
 	
+* completehex/arealog
+	* gen hex_area = fcomhex*arealog
+	
 
 * storing new data 
 
-	export delimited using "data/03_data/3.0_dat.csv", replace
+	** export delimited using "data/03_data/3.0_dat.csv", replace
 
 **# model
 * use "#" for interaction, ## for full factorial interaction
@@ -85,8 +93,38 @@
 
 * base model
 	
-	clogit choice c.travelcost c.depth arealog km_mainland fisl_adj fshelter, group(tripid)
-	estimates store basemod
+	**clogit choice c.travelcost c.depth arealog km_mainland fisl_adj fshelter, group(tripid)
+	**estimates store basemod
+	
+	**model overestimates impact of area, with very high coef for area log -> increases welfare impact dramatically
+	
+	**clogit choice c.travelcost c.depth arealog completehex km_mainland fisl_adj fshelter, group(tripid)
+	**estimates store testmod
+	
+	**tried a model that includes a binary completehex column to account for differences in hex size - no impact of coef, still high
+	
+	**clogit choice c.travelcost c.depth completehex km_mainland fisl_adj fshelter, group(tripid)
+	**estimates store testmod2
+	
+	** added an interaction between completehex without area -> no impact still very high coef
+	
+	**clogit choice c.travelcost c.depth arealog hex_area km_mainland fisl_adj fshelter, group(tripid)
+	**estimates store testmod3
+	
+	**interaction between completehex and arealog -> no impact on model 
+	
+	**clogit choice c.travelcost c.depth arealog fsarea km_mainland fisl_adj fshelter, group(tripid)
+	**estimates store testmod4
+	
+	**instead of complete hex added a binary small hex var -> no impact on model
+	
+	**clogit choice c.travelcost c.depth fcomhex fmarea fsarea km_mainland fisl_adj fshelter, group(tripid)
+	**estimates store testmod5
+	
+	**added a binary, complete hex, medium hex and large hex -> model not  concave after over 200 iterations
+	
+	clogit choice c.travelcost c.depth fhex km_mainland fisl_adj fshelter, group(tripid)
+	estimates store testmod6
 
 * line_ma - test interactions example
 	* clogit choice c.travelcost c.depth c.depthsquared area i.fisl_adj line_ma, group(tripid)
@@ -94,8 +132,10 @@
 	
 * get AIC for each
 
-	estimate stats basemod
-
+	* estimate stats basemod testmod testmod2 testmod3 testmod4 testmod5 testmod6
+	
+	* estimates testmod6
+	
 * store variance-covariance matrix 
 
 	matrix b = e(b)'

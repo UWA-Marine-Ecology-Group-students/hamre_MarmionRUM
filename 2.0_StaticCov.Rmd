@@ -117,6 +117,27 @@ waterGrid$area <- round(set_units(st_area(waterGrid), km^2), 2)
 
 # ggplot() +
 #   geom_sf(data = waterGrid, aes(fill = as.numeric(area)))
+
+waterGrid <- waterGrid %>%
+  mutate(hex = ifelse(as.numeric(area) >= 0.6, "large", NA)) %>%
+  mutate(hex = ifelse(as.numeric(area) >= 0.1 & as.numeric(area) <= 0.6, "medium", hex)) %>%
+  mutate(hex = ifelse(as.numeric(area) <= 0.1, "small", hex)) %>%
+  mutate(hex = as.factor(hex)) %>%
+  mutate(hex_num = ifelse(hex %in% "large", 1, NA)) %>%
+  mutate(hex_num = ifelse(hex %in% "medium", 2, hex_num)) %>%
+  mutate(hex_num = ifelse(hex %in% "small", 3, hex_num)) %>%
+  mutate(hex_num = as.numeric(hex_num))
+
+waterGrid <- waterGrid %>% 
+  mutate(Lhex = ifelse(as.numeric(area) >= 0.6, 1, 0)) %>% 
+  mutate(Mhex = ifelse(as.numeric(area) > 0.1 & as.numeric(area) < 0.6, 1, 0)) %>% 
+  mutate(Shex = ifelse(as.numeric(area) <= 0.1, 1, 0))
+
+
+# dat %>% 
+#   group_by(hex) %>% 
+#   summarise(sum(choice))
+#   Not enough data at small spatial scales for model to work. add this as a dummy variable instead of area.
 ```
 
 ## Artificial infrastructure present
