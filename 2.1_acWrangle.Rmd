@@ -23,7 +23,8 @@ sites <- st_read("./data/gpkg/ac_grid_4283.gpkg")
 BR <- st_read("./data/gpkg/BR_4283.gpkg") # boat ramps
 BRtrips <- readRDS("./data/gpkg/2.1_BRtrips.gpkg")
 
-dat <- read_csv("data/01_data/1.2_dat.csv") %>% filter(ActivityType == "Extractive") %>% 
+dat <- read_csv("data/01_data/1.2_dat.csv") %>% 
+  filter(ActivityType == "Extractive") %>%
   filter(!is.na(UseLat), !is.na(UseLong)) %>% 
   st_as_sf(coords = c("UseLong", "UseLat"), crs = 4283)
 
@@ -64,6 +65,7 @@ gridID_vis <- sites %>%
   dplyr::select(gridID_alt, geom) %>% 
   distinct() 
 
+st_write(gridID_vis, "./data/gpkg/2.1_acChoiceSetQ_4283.gpkg", append = FALSE) # need to write with st_write to open in QGISRUMs
 # check 
 # ggplot() +
 #   geom_sf(data = sites$geom, aes(fill = sites$SZ)) +
@@ -89,14 +91,15 @@ dat <- dat %>%
 # selecting attributes, and tidying
 dat <- dat %>% 
   rename(gridID_vis = gridID_alt) %>% 
-  dplyr::select(TripID, PersonID, gridID_vis, Site, TripDate) %>% 
+  dplyr::select(TripID, PersonID, gridID_vis, Site) %>% 
   distinct() %>% 
   mutate(BR = ifelse(Site %in% "Hillarys", "104", NA),
          BR = ifelse(Site %in% "Mindarie", "105", BR),
          BR = ifelse(Site %in% "OceanReef", "106", BR),
          BR = ifelse(Site %in% "TwoRocks", "112", BR)) %>% 
-  mutate(UseLong = st_coordinates(.)[,1]) %>% 
-  mutate(UseLat = st_coordinates(.)[,2]) %>% 
+  # mutate(UseLong = st_coordinates(.)[,1]) %>% 
+  # mutate(UseLat = st_coordinates(.)[,2]) %>% 
+  dplyr::select(-Site) %>% 
   as.data.frame()
 
 # which(is.na(dat$gridID_vis)==TRUE)
@@ -111,47 +114,52 @@ dat <- inner_join(dat, sites, by = "BR") # FALSE
 
 # testing join
 a <- as.data.frame(table(og_dat$BR)) %>% rename(launches = Freq)
-b <- as.data.frame(table(sites$BR)) %>%  rename(sites_within_100km = Freq)
+b <- as.data.frame(table(sites$BR)) %>%  rename(n_sites = Freq)
 c <- left_join(a, b)
-c$times <- c$launches*c$sites_within_100km
+c$times <- c$launches*c$n_sites
 test = sum(c$times)
 test == nrow(dat) # this should be TRUE
 
-# ggplot()+
+# ggplot() +
 #   geom_sf(data = sites) +
 #   geom_sf(data = dat$geometry)
 ```
 
+# Getting distance from BR to mean coordinate of all uses that launched from teh same boat ramp
 ```{r}
 dat <- dat %>% 
-  st_as_sf()
+  st_as_sf() # turn to sf object
 
+# get centroid of use points
 tmp <- dat %>%
   group_by(gridID_vis, BR) %>%
   summarise(use_centroid = st_union(geometry)) %>%
   st_centroid() %>%
   ungroup() %>%
-  as.data.frame()
+  mutate(id = row_number())
+
+# making distance data frame
+dist <- as.data.frame(set_units(st_distance(tmp, BR), km)) # distance from use centroid to each BR
+names(dist) <- unique(BR$RampID) 
+dist$gridID_vis <- tmp$gridID_vis 
+dist$BR <- tmp$BR 
+dist$id <- tmp$id 
+len <- length(dist) - 3 
+dist <- dist %>% gather("BRdist", "use.centroid_km.BR", 1:len) # gather
+dist$use.centroid_km.BR <- as.numeric(dist$use.centroid_km.BR) 
+
+dist <- dist %>% 
+  filter(BR == BRdist) %>% 
+  dplyr::select(gridID_vis, BR, use.centroid_km.BR) %>% 
+  rename(gridID_alt = gridID_vis) # got to join to alt not visited
 
 dat <- as.data.frame(dat)
 
-dat <- left_join(dat, tmp, by = c("BR", "gridID_vis"))
+dat <- left_join(dat, dist, by = c("BR", "gridID_alt")) # join
 
-# checking geometries
-# ggplot() +
-#   geom_sf(data = sites, lwd = 0.05) +
-#   geom_sf(data = dat, aes(shape = BR, color = as.factor(gridID))) +
-#   geom_sf(data = use_centroid, aes(shape = BR, color = as.factor(gridID)))
-```
-
-```{r}
-# find mean coordinates of use points within a site for each boat ramp
-# dist <- as.data.frame(set_units(st_distance(dat$use_centroid, BR), km)) 
-# names(dist) <- unique(BR$RampID)
-# gridID_vis <- dat$gridID_vis
-# dist$gridID_vis <- gridID_vis
-# dist <- dist %>% gather("BR", "use.centroid_km.BR", 1:length(dist) - 1) 
-# dat <- dat %>% left_join(dist, by = "gridID_vis") # join 
+dat <- dat %>% 
+  mutate(site.centroid_km.BR = as.numeric(site.centroid_km.BR)) %>% 
+  mutate(km_BR = ifelse(is.na(use.centroid_km.BR), site.centroid_km.BR, use.centroid_km.BR)) # distance tc to be measured from
 ```
 
 # Choice and travel cost ($0.54/km)
@@ -160,8 +168,12 @@ dat <- dat %>%
   # mutate(centroidLong = st_coordinates(polyCentroid)[,1]) %>% # need this is using dynamic variables
   # mutate(centroidLat = st_coordinates(polyCentroid)[,2]) %>%
   mutate(choice = ifelse(gridID_vis == gridID_alt, 1, 0)) %>% 
-  mutate(travelCost = as.numeric(0.54*site.centroid_km.BR))
-  # dplyr::select(-c(geom, geometry))
+  mutate(travelCost = as.numeric(0.54*km_BR)) %>% 
+  dplyr::select(-c(geometry, site.centroid_km.BR, use.centroid_km.BR))
+```
+
+```{r}
+saveRDS(dat, "./data/gpkg/2.1_acChoiceSet_4283.gpkg")
 ```
 
 # Save output
