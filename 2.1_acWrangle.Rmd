@@ -91,11 +91,14 @@ state %<>% dplyr::select(geom) %>% st_transform(crs(sim))
 ```
 
 ```{r}
-state_line <- st_intersection(comm, state) %>% # exatrcting lin in common between comm and state
-  mutate(id = row_number()) # need attributes to split by lines
+#stopped working
+# state_line <- st_intersection(comm, state) %>% # extracting lin in common between comm and state
+#   mutate(id = row_number()) # need attributes to split by lines
+# 
+# vert_split <- st_split(water, state_line) # splitting by lines
+# vert_split <- st_collection_extract(vert_split) # extract list
 
-vert_split <- st_split(water, state_line) # splitting by lines
-vert_split <- st_collection_extract(vert_split) # extract list
+vert_split <- rbind(comm, state)
 
 ggplot() +
   geom_sf(data = vert_split)
@@ -122,7 +125,7 @@ ntz_geom <- rbind(sim_holes_geom, npz_geom)
 ntz <- cbind(ntz, ntz_geom) %>% 
   st_as_sf() %>% 
   dplyr::select(-geom) %>% 
-  rename(geometry = x)
+  rename(geom = x)
 
 # nrow(ntz) == nrow(npz) + nrow(sim) # TRUE
   
@@ -130,28 +133,31 @@ vert_split %<>% st_transform(crs(ntz))
 
 vert_split_holes <- st_difference(vert_split, st_combine(ntz)) # cut npz out of sims
 
-vert_split_holes_df <- vert_split_holes %>% as.data.frame() %>% mutate(geom = as.character(geom))
-ntz_df <- ntz %>% as.data.frame() %>% mutate(geometry = as.character(geom))
+vert_split_holes_df <- vert_split_holes %>% as.data.frame() %>% mutate(id = row_number()) %>%  mutate(geom = as.character(geom))
+ntz_df <- ntz %>% as.data.frame() %>% mutate(geom = as.character(geom))
 
+base_grid <- full_join(vert_split_holes_df, ntz_df) %>% 
+  mutate(id = row_number()) %>% 
+  mutate_if(is.numeric, ~replace_na(., 0))
 
+vert_split_holes_geom <- st_as_sf(vert_split_holes$geom)
+ntz_geom <- st_as_sf(ntz$geom)
 
+base_grid_geom <- rbind(vert_split_holes_geom, ntz_geom)
 
+base_grid <- cbind(base_grid, base_grid_geom) %>% 
+  st_as_sf() %>% 
+  dplyr::select(-geom) %>% 
+  rename(geom = x)
 
-
-# ntz_line <- st_cast(ntz, 'MULTILINESTRING') # change to lines
-# ntz_split <- st_split(vert_split, ntz_line) # split vert split
-# ntz_split <- st_collection_extract(ntz_split) 
+# nrow(base_grid) == nrow(vert_split) + nrow(ntz) # TRUE
+#
+# check geometries
+# ggplot() +
+#   geom_sf(data = base_grid, aes(color = as.factor(sz), fill = as.factor(npz)))
 # 
-# a <- ntz_split %>% mutate(id = row_number()) %>% distinct()
-
-# ntz_split_lines <- st_cast(ntz_split, "MULTILINESTRING")
-
-ggplot() +
-  # geom_sf(data = sim) +
-  # geom_sf(data = sim_holes, aes(fill = as.factor(id)))
-  # geom_sf(data = sim_holes_id2, fill = 'red')
-  # geom_sf(data = sim_holes, fill = 'red')
-  geom_sf(data = vert_split_holes, fill = "red")
+# ggplot() +
+#   geom_sf(data = base_grid)
 ```
 
 
