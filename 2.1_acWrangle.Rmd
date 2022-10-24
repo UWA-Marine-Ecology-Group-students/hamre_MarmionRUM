@@ -13,15 +13,22 @@ library(raster)
 library(rgeos)
 library(rgdal)
 library(sf)
+library(lwgeom)
 library(googledrive)
 library(units)
 library(nngeo)
 library(magrittr)
+library(todor)
 
 # data
-sites <- st_read("./data/gpkg/ac_grid_4283.gpkg")
+sites <- st_read("./data/gpkg/ac_grid_4283.gpkg") 
 BR <- st_read("./data/gpkg/BR_4283.gpkg") # boat ramps
 BRtrips <- readRDS("./data/gpkg/2.1_BRtrips.gpkg")
+npz <- readRDS("./data/gpkg/2.1_acNPZ_4283.gpkg")
+sim <- readRDS("./data/gpkg/ac_sim1_sz.gpkg")
+comm <- st_read("./data/gpkg/commwater.gpkg")
+state <- st_read("./data/gpkg/statewater.gpkg")
+water <- readRDS("./data/gpkg/2.1_acStudySite_4283.gpkg")
 
 dat <- read_csv("data/01_data/1.2_dat.csv") %>% 
   filter(ActivityType == "Extractive") %>%
@@ -31,7 +38,123 @@ dat <- read_csv("data/01_data/1.2_dat.csv") %>%
 
 # functions
 source("./functions/spatialFunc.R") # spatial functions
+
+sf_use_s2(FALSE)
+
+# testing layers
+# ggplot() +
+#   geom_sf(data = state) +
+#   geom_sf(data = comm, fill = 'red') +
+#   geom_sf(data = sim) +
+#   geom_sf(data = npz, fill = 'blue') +
+#   geom_sf(data = BR)
 ```
+
+# Make choice set (grid)
+## Cleaning layers
+
+```{r}
+sf_obj <- list(sites, BR, BRtrips, npz, sim, comm, state, water) # TODO: automate file listing
+lapply(sf_obj, st_transform, crs = 4283) # FIX: doesnt work sim still a different crs
+
+# add npz col, all should be 1 and filled in with 0 when data expanded
+npz <- npz %>% 
+  mutate(npz = 1)
+
+# add sz col all should be 1, and row numbers for loop
+sim %<>% 
+  mutate(sz = 1) %>%
+  mutate(id = row_number())
+
+# make a new binary column for each sanctuary zone
+for (i in 1:nrow(sim)) {
+  sz = ifelse(sim$id == i, 1, 0)
+  sim[,length(sim) + 1 ] <- sz 
+  colnames(sim)[ncol(sim)] <- paste0("sz", i)
+}
+
+# removing unecessary attributes
+comm %<>% dplyr::select(geom) %>% st_transform(crs(sim))
+
+state %<>% dplyr::select(geom) %>% st_transform(crs(sim))
+```
+
+
+# turning bathy into contours
+```{r}
+## turn extract contours from bathy
+# contours <- st_as_sf(rasterToContour(bathy, maxpixels = 2500, levels = c(-20, -50)))
+# 
+# contours %<>% st_transform(crs(water))
+# 
+# contours %<>% st_crop(water) %>% rename(depth = level)
+```
+
+```{r}
+state_line <- st_intersection(comm, state) %>% # exatrcting lin in common between comm and state
+  mutate(id = row_number()) # need attributes to split by lines
+
+vert_split <- st_split(water, state_line) # splitting by lines
+vert_split <- st_collection_extract(vert_split) # extract list
+
+ggplot() +
+  geom_sf(data = vert_split)
+```
+
+```{r}
+sim %<>% st_transform(crs(npz))
+
+sim_holes <- st_difference(sim, st_combine(npz)) # cut npz out of sims
+
+# joining sims and npz while maintaining attributes
+sim_holes_df <- sim_holes %>% as.data.frame() %>% mutate(geom = as.character(geom))
+npz_df <- npz %>% as.data.frame() %>% mutate(geom = as.character(geom))
+
+ntz <- full_join(sim_holes_df, npz_df) %>% 
+  mutate(id = row_number()) %>% 
+  mutate_if(is.numeric, ~replace_na(., 0))
+
+sim_holes_geom <- st_as_sf(sim_holes$geom)
+npz_geom <- st_as_sf(npz$geom)
+
+ntz_geom <- rbind(sim_holes_geom, npz_geom)
+
+ntz <- cbind(ntz, ntz_geom) %>% 
+  st_as_sf() %>% 
+  dplyr::select(-geom) %>% 
+  rename(geometry = x)
+
+# nrow(ntz) == nrow(npz) + nrow(sim) # TRUE
+  
+vert_split %<>% st_transform(crs(ntz))
+
+vert_split_holes <- st_difference(vert_split, st_combine(ntz)) # cut npz out of sims
+
+vert_split_holes_df <- vert_split_holes %>% as.data.frame() %>% mutate(geom = as.character(geom))
+ntz_df <- ntz %>% as.data.frame() %>% mutate(geometry = as.character(geom))
+
+
+
+
+
+
+# ntz_line <- st_cast(ntz, 'MULTILINESTRING') # change to lines
+# ntz_split <- st_split(vert_split, ntz_line) # split vert split
+# ntz_split <- st_collection_extract(ntz_split) 
+# 
+# a <- ntz_split %>% mutate(id = row_number()) %>% distinct()
+
+# ntz_split_lines <- st_cast(ntz_split, "MULTILINESTRING")
+
+ggplot() +
+  # geom_sf(data = sim) +
+  # geom_sf(data = sim_holes, aes(fill = as.factor(id)))
+  # geom_sf(data = sim_holes_id2, fill = 'red')
+  # geom_sf(data = sim_holes, fill = 'red')
+  geom_sf(data = vert_split_holes, fill = "red")
+```
+
+
 
 # Prep data
 ```{r}
@@ -71,7 +194,6 @@ st_write(gridID_vis, "./data/gpkg/2.1_acChoiceSetQ_4283.gpkg", append = FALSE) #
 #   geom_sf(data = sites$geom, aes(fill = sites$SZ)) +
 #   geom_sf(data = sites$site_centroid, color = 'red')
 ```
-
 
 ```{r}
 # Use spatial points

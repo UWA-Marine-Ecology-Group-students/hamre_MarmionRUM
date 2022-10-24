@@ -17,7 +17,6 @@
 * read data 
 
 	clear
-	**import delimited "data/02_data/2.1_dat.csv"
 	import delimited "data/02_data/2.1_acdat.csv"
 
 **# data prep 
@@ -67,11 +66,11 @@
 
 	cd "/Users/23088313/Documents/git_repos/hamre_MarmionRUM/data/03_data"
 
-	putexcel set mod.xlsx, replace
+	putexcel set ac_mod.xlsx, replace
 	putexcel A2 = matrix(b), rownames
 	putexcel B1 = "Vars"
 	putexcel C1 = "Coef"
-	putexcel set mod.xlsx, modify sheet(v)
+	putexcel set ac_mod.xlsx, modify sheet(v)
 	putexcel A2 = matrix(v), rownames
-	putexcel set mod.xlsx, modify sheet(v)
+	putexcel set ac_mod.xlsx, modify sheet(v)
 	putexcel A1 = matrix(v), rownames
