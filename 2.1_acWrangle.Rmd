@@ -102,8 +102,10 @@ vert_split <- rbind(comm, state)
 
 ggplot() +
   geom_sf(data = vert_split)
-```
 
+# nrow(vert_split) == 2
+```
+# Make base grid
 ```{r}
 sim %<>% st_transform(crs(npz))
 
@@ -148,18 +150,179 @@ base_grid_geom <- rbind(vert_split_holes_geom, ntz_geom)
 base_grid <- cbind(base_grid, base_grid_geom) %>% 
   st_as_sf() %>% 
   dplyr::select(-geom) %>% 
-  rename(geom = x)
+  rename(geom = x) %>% 
+  mutate(ntz = ifelse(npz == 1 | sz == 1, 1, 0))
 
-# nrow(base_grid) == nrow(vert_split) + nrow(ntz) # TRUE
-#
+
+
+# checks
+nrow(base_grid) == nrow(vert_split) + nrow(ntz) # TRUE
+
 # check geometries
-# ggplot() +
-#   geom_sf(data = base_grid, aes(color = as.factor(sz), fill = as.factor(npz)))
-# 
-# ggplot() +
-#   geom_sf(data = base_grid)
+ggplot() +
+  geom_sf(data = base_grid, aes(color = as.factor(sz), fill = as.factor(npz)))
+
+ggplot() +
+  geom_sf(data = base_grid, aes(fill = as.factor(ntz)))
 ```
 
+Trying to make lines to split polygons in base grid
+Needs to be at least one data point in ecah grid
+
+For every polygon (row in base_grid) when ntz == 0
+  - draw a line 3 km south of top border
+  - check to see if there is a data point above it/in new polygon 
+  - if yes start new line 
+  - if no start 4 km south, if no again start 5km south so on 
+  
+```{r}
+# for (i in 1:3) {
+#   l <- st_linestring(matrix(
+#     c(xminmax[1],
+#       df2[i, "lat"],
+#       xminmax[2],
+#       df2[i, "lat"]),
+#     nrow = 2,
+#     byrow = TRUE
+#   ))
+#   # Create final object line
+#   if (i == 1) {
+#     line <- l
+#   } else {
+#     line <- c(line, l)
+#   }
+# }
+
+d <- st_sfc(st_linestring(matrix(c(115.1, -31.4, 115.7, -31.4), nrow = 2, byrow = TRUE), 
+                          dim = "XY"))
+st_crs(d) = crs(base_grid)
+
+# e <- st_sfc(st_multilinestring(list(matrix(c(1, 5, 5, 5), nrow = 2, byrow = TRUE), 
+#                              matrix(c(5, 1, 1, 1), nrow = 2, byrow = TRUE)
+#                              ), dim = "XY"))
+# st_crs(e) = crs(state)
+# state %<>% st_transform(4283)
+# 
+# d %<>% st_intersection(state)
+# 
+# ##
+# 
+# d %<>% st_cast("LINESTRING") %>% st_collection_extract("LINESTRING")
+# 
+# d %<>% st_as_sf()
+# 
+# a <- st_split(d, base_grid)
+# 
+# b <- st_collection_extract(a, "LINESTRING")
+# 
+# c <- st_polygonize(b)
+
+
+# split by lines removes all attributes, see if there is another way
+
+# state_holes <- st_difference(state, st_combine(ntz)) # 
+
+# state_holes <-  st_collection_extract(state_holes, c("POLYGON"))
+# 
+# 
+# a <- state_holes %>% st_subdivide(3000) %>% st_collection_extract("POLYGON")
+# a %<>% mutate(id = row_number(),
+#               area = round(set_units(st_area(.), km^2), 2),
+#               area = as.numeric(area))
+#   
+# a %<>% filter(area > 1)
+
+# st_intersects(a, dat, sparse = FALSE)
+
+# st_crs(bbox, parameters = TRUE)$units_gdal
+# 
+# bbox <- st_as_sfc(st_bbox(state_holes)) 
+
+# bbox <- st_bbox(state_holes)
+# g1 <- state_holes %>% st_make_grid(cellsize = c(bbox$xmax-bbox$xmin, 0.05))
+# g1state <- st_intersection(state_holes, g1)
+# g1state$area <- as.numeric(round(set_units(st_area(g1state), km^2), 2))
+# g2state <- g1state %>% filter(area > 20)
+# 
+# 
+# g2dat <- st_join(g2state, dat, join = st_intersects)
+# 
+# a <- as.data.frame(st_intersects(g2state, dat, sparse = FALSE))
+#    
+# b <- a %>% 
+#   rowwise %>% 
+#    mutate(inPoly = if_any(starts_with('V'), ~. == TRUE)) %>%
+#    ungroup()
+# 
+# g2state$dat <- b$inPoly
+# 
+# g2false <- g2state %>% filter(dat == FALSE)
+# 
+# hGrid <- seq(from = 0.03, by = 0.02)
+
+# add in combination of sim and npz 
+
+#ASCgrid function, makes automated and customisable grid for a alternative specific constant RUM. This function will create horizontal lines across a polygon, and check there is a spatial use data point in each cell. The function will iterate, making the grid gradually bigger with each iteration until there is at leats one data point in every cell. 
+#
+# ARGUMENTS
+# poly: an sf object which the grid is to be made in
+# ntz: a sf object of the npz an simulations 
+# point: spatial use data to be used in RUM
+# from: distance between horizontal line - unit to be same as polygon crs (default 0.03 degrees)
+# by: change in distance between horizontal line with each iteration - units to be the same as poly crs (default 0.02 degrees)
+# min_area: define the minimum allowable area of grid cells. 
+
+ASCgrid <- function(poly, ntz, point, from = 0.03, by = 0.02, min_area = 20) {
+  poly_w_ntz <- st_difference(poly, st_combine(ntz))
+  bbox <- st_bbox(poly_w_ntz) # make bbox
+  hGrid <- seq(from = from, by = by) # make sequence
+  # makes grid & checks data presents, if not loops over next grid
+  
+  for (i in hGrid) { 
+    grid <- poly_w_ntz %>% st_make_grid(cellsize = c(bbox$xmax - bbox$xmin, i))
+    grid <- st_intersection(poly_w_ntz, grid)
+    grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
+    grid %<>% filter(area > min_area)
+    temp <- as.data.frame(st_intersects(grid, point, sparse = FALSE)) %>%
+      rowwise %>% 
+      mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
+      ungroup()
+      grid$data_present <- temp$inpoly_w_ntz
+      
+      if (any(grid$data_present == FALSE)) {
+        print(paste0("Missing data (", i ,"), making new grid"))
+      } else {
+        print(paste(i, "Grid", sep = " "))
+        print(grid)
+        print(
+          ggplot() +
+          geom_sf(data = point) +
+          geom_sf(data = grid, alpha = 0)
+        )
+        return(grid)
+        break
+      }
+  }
+}
+
+t <- ASCgrid(poly = state, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 45)
+
+comm %<>% st_transform(crs(ntz))
+
+t2 <- ASCgrid(poly = comm, ntz = ntz, point = dat)
+
+t <- ASCgrid(poly = state_holes, point = dat)
+
+
+
+ggplot() +
+  # geom_sf(data = a, aes(fill = as.factor(id))) +
+  geom_sf(data = dat) +
+   # geom_sf(data = a)
+   # geom_sf(data = bbox) +
+  # geom_sf(data = state_holes) +
+  geom_sf(data = t, alpha = 0)
+```
 
 
 # Prep data
