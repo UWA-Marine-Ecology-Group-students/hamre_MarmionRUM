@@ -166,96 +166,43 @@ ggplot() +
   geom_sf(data = base_grid, aes(fill = as.factor(ntz)))
 ```
 
-Trying to make lines to split polygons in base grid
-Needs to be at least one data point in ecah grid
-
-For every polygon (row in base_grid) when ntz == 0
-  - draw a line 3 km south of top border
-  - check to see if there is a data point above it/in new polygon 
-  - if yes start new line 
-  - if no start 4 km south, if no again start 5km south so on 
-  
+# Working function - needs improvment
 ```{r}
-#ASCgrid function, makes automated and customisable grid for a alternative specific constant RUM. This function will create horizontal lines across a polygon, and check there is a spatial use data point in each cell. The function will iterate, making the grid gradually bigger with each iteration until there is at leats one data point in every cell. 
-#
-#
-# TODO
-# fix loose ends of state polygon
-# merge small polygons, not filter
-# let the function append the npz and the sims (separate function?)
-# let function do all polygons within vertical bounds 
-# vertical lines are one long polygon from top to bottom
-# do for all rows in poly, get info for both polygons not just last one
+# ASCgrid function, makes automated and customisable grid for a alternative specific constant RUM. This function will create horizontal lines across a polygon, and check there is a spatial use data point in each cell. The function will iterate, making the grid gradually bigger with each iteration until there is at leats one data point in every cell. 
 
 ASCgrid <- function(poly, #  sf polygon to split
                     ntz, # sf polygon with ntzs
-                    point, # spatial use data 
+                    point, # spatial use data
                     from = 0.03, # starting value of distance between grid lines
                     by = 0.02, # incrementally distance increase to iterate over
                     min_area = 20, # min allowable area
-                    vert = FALSE, # vertical or horizontal divisions
-                    crs = 4283) { # makes all crs the same, output crs
-  
-  # make crs for every sf object the same 
+                    vert = FALSE,
+                    crs) { # vertical or horizontal divisions
+
+   # make crs for every sf object the same 
   poly %<>% st_transform(crs)
   ntz %<>% st_transform(crs)
   point %<>% st_transform(crs)
- 
-  # for (j in 1:nrow(poly)) {
-  # row <- poly[j,]
   
-  # Preps data for loop
-  poly_w_ntz <- st_difference(row, st_combine(ntz)) 
+  poly_w_ntz <- st_difference(poly, st_combine(ntz)) # crops ntz out of grid
   bbox <- st_bbox(poly_w_ntz) # make bbox
   
-  # hGrid <- seq(from = from, by = by) # make sequence
+  Grid <- seq(from = from, by = by) # make sequence
   
   # makes grid & checks data presents, if not loops over next grid
-  
 if (vert == FALSE) {
-  
-  hGrid <- seq(from = from, by = by)
-  
-  for (i in hGrid) { 
+
+  for (i in Grid) {
     grid <- poly_w_ntz %>% st_make_grid(cellsize = c(bbox$xmax - bbox$xmin, i))
     grid <- st_intersection(poly_w_ntz, grid)
     grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
     grid %<>% filter(area > min_area)
     temp <- as.data.frame(st_intersects(grid, point, sparse = FALSE)) %>%
-      rowwise %>% 
+      rowwise %>%
       mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
       ungroup()
       grid$data_present <- temp$inpoly_w_ntz
-      
-      if (any(grid$data_present == FALSE)) {
-        print(paste0("Missing data (", i ,"), making new grid"))
-      } else {
-        # print(paste(i, "Grid", sep = " "))
-        print(grid)
-        print(
-          ggplot() +
-          geom_sf(data = point) +
-          geom_sf(data = grid, alpha = 0)
-        )
-        return(grid)
-        break
-      }
-  }
-} else {
-  
-  vGrid <- seq(from = from, by = by)
-  
-   for (i in vGrid) { 
-    grid <- poly_w_ntz %>% st_make_grid(cellsize = c(i, bbox$ymax - bbox$ymin))
-    grid <- st_intersection(poly_w_ntz, grid)
-    grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
-    grid %<>% filter(area > min_area)
-    temp <- as.data.frame(st_intersects(grid, point, sparse = FALSE)) %>%
-      rowwise %>% 
-      mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
-      ungroup()
-      grid$data_present <- temp$inpoly_w_ntz
-      
+
       if (any(grid$data_present == FALSE)) {
         print(paste0("Missing data (", i ,"), making new grid"))
       } else {
@@ -270,37 +217,127 @@ if (vert == FALSE) {
         break
       }
   }
+} else {
+
+   for (i in Grid) {
+    grid <- poly_w_ntz %>% st_make_grid(cellsize = c(i, bbox$ymax - bbox$ymin))
+    grid <- st_intersection(poly_w_ntz, grid)
+    grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
+    grid %<>% filter(area > min_area)
+    temp <- as.data.frame(st_intersects(grid, point, sparse = FALSE)) %>%
+      rowwise %>%
+      mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
+      ungroup()
+      grid$data_present <- temp$inpoly_w_ntz
+
+      if (any(grid$data_present == FALSE)) {
+        print(paste0("Missing data (", i ,"), making new grid"))
+      } else {
+        print(paste(i, "Grid", sep = " "))
+        print(grid)
+        print(
+          ggplot() +
+          geom_sf(data = point, size = 0.5) +
+          geom_sf(data = grid, alpha = 0, lwd = 0.5)
+        )
+        return(grid)
+        break
+      }
+  }
 }
- # print(j)
- #  }
 }
 
-t <- ASCgrid(poly = vert_split, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 30, crs = 4283, vert = FALSE)
+demo <- ASCgrid(poly = state, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 30, crs = 4283, vert = FALSE) # crs using degrees
+```
 
+# test function
+```{r}
+asc_test <- function(poly, #  sf polygon to split
+                    ntz, # sf polygon with ntzs
+                    point, # spatial use data
+                    from = 0.03, # starting value of distance between grid lines
+                    by = 0.02, # incrementally distance increase to iterate over
+                    min_area = 20, # min allowable area
+                    vert = FALSE,
+                    crs) { # vertical or horizontal divisions
+
+   # make crs for every sf object the same 
+  poly %<>% st_transform(crs)
+  ntz %<>% st_transform(crs)
+  point %<>% st_transform(crs)
+  
+  poly_w_ntz <- st_difference(poly, st_combine(ntz)) # crops ntz out of grid
+  bbox <- st_bbox(poly_w_ntz) # make bbox
+  
+  Grid <- seq(from = from, by = by) # make sequence
+  
+  # makes grid & checks data presents, if not loops over next grid
+if (vert == FALSE) {
+
+  for (i in Grid) {
+    grid <- poly_w_ntz %>% st_make_grid(cellsize = c(bbox$xmax - bbox$xmin, i))
+    grid <- st_intersection(poly_w_ntz, grid)
+    grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
+    grid %<>% filter(area > min_area)
+    temp <- as.data.frame(st_intersects(grid, point, sparse = FALSE)) %>%
+      rowwise %>%
+      mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
+      ungroup()
+      grid$data_present <- temp$inpoly_w_ntz
+
+      if (any(grid$data_present == FALSE)) {
+        print(paste0("Missing data (", i ,"), making new grid"))
+      } else {
+        print(paste(i, "Grid", sep = " "))
+        print(grid)
+        print(
+          ggplot() +
+          geom_sf(data = point) +
+          geom_sf(data = grid, alpha = 0)
+        )
+        return(grid)
+        break
+      }
+  }
+} else {
+
+   for (i in Grid) {
+    grid <- poly_w_ntz %>% st_make_grid(cellsize = c(i, bbox$ymax - bbox$ymin))
+    grid <- st_intersection(poly_w_ntz, grid)
+    grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
+    grid %<>% filter(area > min_area)
+    temp <- as.data.frame(st_intersects(grid, point, sparse = FALSE)) %>%
+      rowwise %>%
+      mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
+      ungroup()
+      grid$data_present <- temp$inpoly_w_ntz
+
+      if (any(grid$data_present == FALSE)) {
+        print(paste0("Missing data (", i ,"), making new grid"))
+      } else {
+        print(paste(i, "Grid", sep = " "))
+        print(grid)
+        print(
+          ggplot() +
+          geom_sf(data = point, size = 0.5) +
+          geom_sf(data = grid, alpha = 0, lwd = 0.5)
+        )
+        return(grid)
+        break
+      }
+  }
+}
+}
+
+test <- asc_test(poly = state, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 30, crs = 4283, vert = FALSE) # crs using degrees
 ```
 
 
+# testing stuff to add to function
 ```{r}
-t <- ASCgrid(poly = state, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 30)
-
-t2 <- ASCgrid(poly = comm, ntz = ntz, point = dat)
-
-t <- ASCgrid(poly = state_holes, point = dat)
-
-s <- ASCgrid(poly = state, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 30, vert = TRUE)
 
 ggplot() +
-  # geom_sf(data = a, aes(fill = as.factor(id))) +
-  # geom_sf(data = dat) +
-   # geom_sf(data = a, fill = "red")+
    geom_sf(data = t, fill = "red")
-
-   # geom_sf(data = bbox) +
-  # geom_sf(data = state_holes)
-  # geom_sf(data = t, fill = "red")+
-  # geom_sf(data = t2, fill = "blue") +
-  # geom_sf(data = ntz, fill = "pink")
-  # geom_sf(data = grid, aes(fill = as.factor(id)))
 
 
 # data for env to test
@@ -361,84 +398,9 @@ e <- st_join(state, ntz, join = st_touches)
 a <- base_grid %>% filter(ntz != 1)
 ```
 
-```{r}
-# ASCgrid <- function(poly, #  sf polygon to split
-#                     ntz, # sf polygon with ntzs
-#                     point, # spatial use data 
-#                     from = 0.03, # starting value of distance between grid lines
-#                     by = 0.02, # incrementally distance increase to iterate over
-#                     min_area = 20, # min allowable area
-#                     vert = FALSE) { # vertical or horizontal divisions
-#   
-#   poly_w_ntz <- st_difference(poly, st_combine(ntz))
-#   bbox <- st_bbox(poly_w_ntz) # make bbox
-#   # hGrid <- seq(from = from, by = by) # make sequence
-#   # makes grid & checks data presents, if not loops over next grid
-# if (vert == FALSE) {
-#   
-#   hGrid <- seq(from = from, by = by)
-#   
-#   for (i in hGrid) { 
-#     grid <- poly_w_ntz %>% st_make_grid(cellsize = c(i, i))
-#     grid <- st_intersection(poly_w_ntz, grid)
-#     grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
-#     grid %<>% filter(area > min_area)
-#     temp <- as.data.frame(st_intersects(grid, point, sparse = FALSE)) %>%
-#       rowwise %>% 
-#       mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
-#       ungroup()
-#       grid$data_present <- temp$inpoly_w_ntz
-#       
-#       if (any(grid$data_present == FALSE)) {
-#         print(paste0("Missing data (", i ,"), making new grid"))
-#       } else {
-#         print(paste(i, "Grid", sep = " "))
-#         print(grid)
-#         print(
-#           ggplot() +
-#           geom_sf(data = point) +
-#           geom_sf(data = grid, alpha = 0)
-#         )
-#         return(grid)
-#         break
-#       }
-#   }
-# } else {
-#   
-#   vGrid <- seq(from = from, by = by)
-#   
-#    for (i in vGrid) { 
-#     grid <- poly_w_ntz %>% st_make_grid(cellsize = c(i, i))
-#     grid <- st_intersection(poly_w_ntz, grid)
-#     grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
-#     grid %<>% filter(area > min_area)
-#     temp <- as.data.frame(st_intersects(grid, point, sparse = FALSE)) %>%
-#       rowwise %>% 
-#       mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
-#       ungroup()
-#       grid$data_present <- temp$inpoly_w_ntz
-#       
-#       if (any(grid$data_present == FALSE)) {
-#         print(paste0("Missing data (", i ,"), making new grid"))
-#       } else {
-#         print(paste(i, "Grid", sep = " "))
-#         print(grid)
-#         print(
-#           ggplot() +
-#           geom_sf(data = point) +
-#           geom_sf(data = grid, alpha = 0)
-#         )
-#         return(grid)
-#         break
-#       }
-#   }
-# }
-# }
-# 
-# t <- ASCgrid(poly = state, ntz = ntz, point = dat, from = 0.003, by = 0.02, min_area = 30)
 
-```
 
+##########################
 # Prep data
 ```{r}
 # Site daat (AC grid)
