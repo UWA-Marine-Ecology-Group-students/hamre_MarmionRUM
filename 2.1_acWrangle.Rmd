@@ -211,6 +211,7 @@ if (vert == FALSE) {
       mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
       ungroup()
       grid$data_present <- temp$inpoly_w_ntz
+      grid %<>% mutate(id = row_number())
 
       if (any(grid$data_present == FALSE)) {
         print(paste0("Missing data (", i ,"), making new grid"))
@@ -219,8 +220,8 @@ if (vert == FALSE) {
         print(grid)
         print(
           ggplot() +
-          geom_sf(data = point) +
-          geom_sf(data = grid, alpha = 0)
+          geom_sf(data = grid, aes(fill = as.factor(id)), lwd = 0.5) +
+          geom_sf(data = point, size = 0.5)
         )
         return(grid)
         break
@@ -238,6 +239,7 @@ if (vert == FALSE) {
       mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
       ungroup()
       grid$data_present <- temp$inpoly_w_ntz
+      grid %<>% mutate(id = row_number())
 
       if (any(grid$data_present == FALSE)) {
         print(paste0("Missing data (", i ,"), making new grid"))
@@ -246,8 +248,8 @@ if (vert == FALSE) {
         print(grid)
         print(
           ggplot() +
-          geom_sf(data = point, size = 0.5) +
-          geom_sf(data = grid, alpha = 0, lwd = 0.5)
+          geom_sf(data = grid, aes(fill = as.factor(id)), lwd = 0.5) +
+          geom_sf(data = point, size = 0.5)
         )
         return(grid)
         break
@@ -256,7 +258,7 @@ if (vert == FALSE) {
 }
 }
 
-demo <- ASCgrid(poly = state, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 30, crs = 4283, vert = TRUE) # crs using degrees
+demo <- ASCgrid(poly = state, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 30, crs = 4283, vert = FALSE) # crs using degrees
 ```
 
 # test function
@@ -264,11 +266,10 @@ demo <- ASCgrid(poly = state, ntz = ntz, point = dat, from = 0.03, by = 0.02, mi
 asc_test <- function(poly, #  sf polygon to split
                     ntz, # sf polygon with ntzs
                     point, # spatial use data
-                    from = 0.03, # starting value of distance between grid lines
-                    by = 0.02, # incrementally distance increase to iterate over
+                    from, # starting value of distance between grid lines
+                    by, # incrementally distance increase to iterate over
                     min_area = 20, # min allowable area km2
-                    vert = FALSE,
-                    # units = "km",
+                    vert = FALSE, # make line orientation perpendicular to lines in poly
                     crs) { # vertical or horizontal divisions
 
   if (missing(poly) || missing(ntz) || missing(point)) {
@@ -284,7 +285,8 @@ asc_test <- function(poly, #  sf polygon to split
   ntz %<>% st_transform(crs)
   point %<>% st_transform(crs)
   
-  poly_w_ntz <- st_difference(poly, st_combine(ntz)) # crops ntz out of grid
+  ntz %<>% st_buffer( 0) %>% st_buffer(0.0001) %>% st_make_valid()
+  poly_w_ntz <- st_difference(st_make_valid(poly), st_combine(ntz)) # crops ntz out of grid
   bbox <- st_bbox(poly_w_ntz) # make bbox
   
   # Grid <- seq(from = units::set_units(from, units), by = units::set_units(by, units)) # make sequence
@@ -350,10 +352,11 @@ if (vert == FALSE) {
 }
 }
 
-a <- as.data.frame(state)
 
-asc_test(poly = a, ntz = ntz, point = dat, from = 0.03, by = 0.03, min_area = 30, crs = 4283, vert = FALSE) # crs using degrees
-asc_test(poly = state, ntz = ntz, point = dat, from = 1, by = 2, min_area = 30, crs = 28350, vert = FALSE, units = "km") 
+asc_test(poly = state, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 30, crs = 4283, vert = TRUE) # crs using degrees
+
+asc_test(poly = state, ntz = ntz, point = dat, from = 3000, by = 2000, min_area = 30, crs = 28350, vert = FALSE) 
+
 
 ```
 
@@ -365,7 +368,8 @@ a <- st_transform(state, 28350)
 st_crs(a, parameters = TRUE)$units_gdal
 
 ggplot() +
-   geom_sf(data = t, fill = "red")
+   # geom_sf(data = n) 
+  geom_sf(data = poly_w_ntz)
 
 
 # data for env to test
