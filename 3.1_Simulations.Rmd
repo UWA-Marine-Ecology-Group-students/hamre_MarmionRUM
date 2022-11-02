@@ -18,19 +18,10 @@ library(raster)
 library(rgeos)
 library(rgdal)
 library(sf)
-library(patchwork)
 
 # data
-dat <- readRDS("./data/gpkg/2.1_ChoiceSet_4283.gpkg")  # this is the generalised data with static site attributes
+dat <- readRDS("./data/gpkg/2.1_5kmChoiceSet_4283.gpkg")  # this is the generalised data with static site attributes
 BRtrips <- readRDS("./data/gpkg/2.1_BRtrips.gpkg") # This is produced by the "TripAllocation.R" script (Matt)
-
-# Data with coefficients from model using trip data
-b <- read_excel("./data/03_data/mod.xlsx") %>% dplyr::select(Vars, Coef)
- 
-# covariance matrix
-v <- read_excel("./data/03_data/mod.xlsx", sheet = "v", col_names = rep("x", 8)) %>% 
-  dplyr::select(-x...1 ) %>% 
-  distinct()
 
 # Plotting
 mp <- st_read("./data/gpkg/pmmp_4326.gpkg")
@@ -59,6 +50,85 @@ grid <- dat %>% as.data.frame() %>%
  col <- c("#d38685") 
 ```
 
+Model Data
+Multiple model
+b: Data with coefficients from model using trip data
+v: covariance matrix
+```{r}
+# base model
+# b <- read_excel("./data/03_data/attmod_base.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/attmod_base.xlsx", sheet = "v", col_names = rep("x", 8)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+
+# no area model (test to see if area is causing  the issue)
+# b <- read_excel("./data/03_data/attmod_noarea.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/attmod_noarea.xlsx", sheet = "v", col_names = rep("x", 7)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+
+# area model (not log transformed)
+# b <- read_excel("./data/03_data/attmod_area.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/attmod_area.xlsx", sheet = "v", col_names = rep("x", 8)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+
+#   binary complete hex
+# b <- read_excel("./data/03_data/attmod_comhex.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/attmod_comhex.xlsx", sheet = "v", col_names = rep("x", 8)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+
+#   complete hex + arealog
+# b <- read_excel("./data/03_data/attmod_arealog_comhex.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/attmod_arealog_comhex.xlsx", sheet = "v", col_names = rep("x", 9)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+
+#   complete hex + area
+# b <- read_excel("./data/03_data/attmod_area_comhex.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/attmod_area_comhex.xlsx", sheet = "v", col_names = rep("x", 9)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+
+#   complete hex*arealog
+# b <- read_excel("./data/03_data/attmod_arealoghex.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/attmod_arealoghex.xlsx", sheet = "v", col_names = rep("x", 8)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+
+#   complete hex*arealog + arealog
+# b <- read_excel("./data/03_data/attmod_arealog_arealoghex.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/attmod_arealog_arealoghex.xlsx", sheet = "v", col_names = rep("x", 9)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+
+# complete hex*area
+# b <- read_excel("./data/03_data/attmod_areahex.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/attmod_areahex.xlsx", sheet = "v", col_names = rep("x", 8)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+
+# complete hex*area, area
+# b <- read_excel("./data/03_data/attmod_area_areahex.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/attmod_area_areahex.xlsx", sheet = "v", col_names = rep("x", 9)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+
+# complete hex*area, area
+# b <- read_excel("./data/03_data/attmod_shex.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/attmod_shex.xlsx", sheet = "v", col_names = rep("x", 8)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+#   
+#   # base model 5km
+b <- read_excel("./data/03_data/attmod_5kmbase.xlsx") %>% dplyr::select(Vars, Coef)
+v <- read_excel("./data/03_data/attmod_5kmbase.xlsx", sheet = "v", col_names = rep("x", 7)) %>%
+  dplyr::select(-x...1 ) %>%
+  distinct()
+```
+
+
 # Rearrange data
 Aim is to have matrix with same row names and column names
 ```{r rearrange, include = FALSE}
@@ -76,6 +146,8 @@ Need to transform data in choice ste to match transformations used in model
 dat <- dat %>%
   # mutate(depthsquared = Depth*Depth) %>%
    mutate(arealog = log(as.numeric(area) + 1)) %>%
+  mutate(hex_arealog = commhex*arealog) %>% 
+  mutate(hex_area = commhex*area) %>% 
   st_drop_geometry() %>%
   as.data.frame()
 ```
@@ -103,8 +175,37 @@ We expect recreator  (i) to choose the site (j) with the highest expected utilit
 ```{r utility, include = FALSE}
 
 # define vars used in RUM
-     vars <- c("travelCost", "Depth", "km_mainland", "isl_adj", "shelter", "shex", "lhex")
-    
+# base model
+     # vars <- c("travelCost", "Depth", "arealog","km_mainland", "isl_adj", "shelter") 
+     
+# no area
+     # vars <- c("travelCost", "Depth", "km_mainland", "isl_adj", "shelter")
+
+# area
+     # vars <- c("travelCost", "Depth", "area","km_mainland", "isl_adj", "shelter")
+
+# complete hex
+     # vars <- c("travelCost", "Depth", "commhex","km_mainland", "isl_adj", "shelter")
+
+# arealog + complete hex
+     # vars <- c("travelCost", "Depth", "arealog", "commhex","km_mainland", "isl_adj", "shelter")
+
+# complete hex + area
+  # vars <- c("travelCost", "Depth", "area", "commhex","km_mainland", "isl_adj", "shelter")
+
+# complete hex*arealog
+  # vars <- c("travelCost", "Depth", "hex_arealog","km_mainland", "isl_adj", "shelter")
+
+# complete hex*arealog + arealog
+  # vars <- c("travelCost", "Depth", "arealog","hex_arealog","km_mainland", "isl_adj", "shelter")
+  # 
+# complete hex*area
+  # vars <- c("travelCost", "Depth", "area","hex_area","km_mainland", "isl_adj", "shelter")
+  # 
+# base model 5km
+     vars <- c("travelCost", "Depth", "arealog","km_mainland", "isl_adj")
+
+
 # turn defined vars into matrix from dat, make sure there is no geometry
     rum_matrix <- as.matrix(dat[, vars]) 
     # nrow(rum_matrix) == nrow(dat) # should be true. 
@@ -142,9 +243,9 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
     
     # applying probability function to every utility cell in Vj by boat ramp
 
-    npz <- dat %>%  filter(NPZ == 1)
+    # npz <- dat %>%  filter(NPZ == 1)
 
-    Vj[Vj$ID %in% npz$gridID_alt, cols] <- 0
+    # Vj[Vj$ID %in% npz$gridID_alt, cols] <- 0
     p <- Vj[ , lapply(.SD, f1), by = br, .SDcols = c(cols, "ID")] 
     p <- p[order(br, ID)]
     dat %<>% arrange(BR, gridID_alt)
@@ -172,7 +273,8 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
 # Sim 1
 ```{r closures, include = FALSE}
 # Assign closures
-sim <- st_read("./data/gpkg/Sim 1.gpkg")
+sim <- st_read("./data/gpkg/sim1_5km.gpkg")
+sim %<>% rename(gridID_alt = fid)
 ntz <- c(sim$gridID_alt)
 
 # Calculate probability of visit and logsums: post-simulation
@@ -198,8 +300,8 @@ ntz <- c(sim$gridID_alt)
     dat$p.upp_sim <- rowQuantiles(p, probs = 1 - sqrt(0.025)) #Note below about weird probs
     
     # ggplot() +
-    #   geom_sf(data = dat) +
-    #   geom_sf(data = sim, fill = 'red')
+    #   geom_sf(data = sites) +
+    #   geom_sf(data = sim, fill = "red")
 ```
 
 # Extract Welfare
@@ -227,10 +329,10 @@ ntz <- c(sim$gridID_alt)
                 "Annual upper welfare impact per trip ($)" = round(sum(w.upp), 2))
 
     W_impact_trip
-    png("./plots/sim1.W_impact_trip.png", height = 50*nrow(W_impact_trip), width =
-          200*ncol(W_impact_trip))
-    grid.table(W_impact_trip)
-    dev.off()
+    # png(paste0("./plots/Attribute RUM/", mod,".png"), height = 50*nrow(W_impact_trip), width =
+    #       200*ncol(W_impact_trip))
+    # grid.table(W_impact_trip)
+    # dev.off()
 
 # save output
   # write.csv(dat, "./ignore/03_data/3.1_Wsimdat.csv")
@@ -298,10 +400,12 @@ W_impact %<>%  rename("Annual lower welfare impact ($)" = welf_low_low_TRIPS_Grv
                       "Annual upper welfare impact ($)" = welf_upp_upp_TRIPS_Grvt__5)
 
 W_impact
-png("./plots/sim.W_impact.png", height = 50*nrow(W_impact), width = 200*ncol(W_impact))
-grid.table(W_impact)
-dev.off()
+# png("./plots/Attribute RUM/att_s1.W_impact.png", height = 50*nrow(W_impact), width = 200*ncol(W_impact))
+# grid.table(W_impact)
+# dev.off()
 ```
+
+
 
 ```{r sc_spimpact, include = FALSE}
 # add planning area and crop to it
@@ -335,7 +439,7 @@ presim <- ggplot(RUM_grid) +
   geom_sf(data = NPZ, lwd = 0.25) +
   geom_sf(data = sp_mpbr, color = 'red', fill = 'red', size = 0.5)
 
-ggsave(path = "./plots", filename = paste("sim1.presim.png", sep = ''), plot = presim, width = 8, height = 4)
+ggsave(path = "./plots/Attribute RUM", filename = paste("att_s1.presim.png", sep = ''), plot = presim, width = 8, height = 4)
 
 postsim <- ggplot(RUM_grid) +
       xlab("Longitude") + ylab("Latitude") +
@@ -349,7 +453,7 @@ postsim <- ggplot(RUM_grid) +
   geom_sf(data = NPZ, lwd = 0.25) +
   geom_sf(data = sp_mpbr, color = 'red', fill = 'red', size = 0.5)
 
-ggsave(path = "./plots", filename = paste("sim1.postsim.png", sep = ''), width = 8, height = 4)
+ggsave(path = "./plots/Attribute RUM", filename = paste("att_s1.postsim.png", sep = ''), width = 8, height = 4)
 
 diff <- ggplot(RUM_grid) +
       xlab("Longitude") + ylab("Latitude") +
@@ -362,7 +466,7 @@ diff <- ggplot(RUM_grid) +
   geom_sf(data = sp_mpbr, color = 'red', fill = 'red', size = 0.5) +
   geom_sf(data = sim, lwd = 0.05, fill = "black")
 
-ggsave(path = "./plots", filename = paste("sim1.diff.png", sep = ''), width = 8, height = 4)
+ggsave(path = "./plots/Attribute RUM", filename = paste("att_s1.diff.png", sep = ''), width = 8, height = 4)
 
 presim
 postsim

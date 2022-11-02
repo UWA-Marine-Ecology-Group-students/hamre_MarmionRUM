@@ -15,7 +15,6 @@ library(sf)
 library(googledrive)
 library(units)
 library(nngeo)
-library(windfetch)
 
 # functions
 source("./functions/spatialFunc.R") # spatial functions
@@ -23,14 +22,14 @@ source("./functions/spatialFunc.R") # spatial functions
 # data
 ## spatial
 ### gpkg - ESPG 4283 (GDA94)
-BR <- st_read("./data/gpkg/BR_4283.gpkg") # boat ramps
-coast <- st_read("./data/gpkg/Coast_4283.gpkg") # coast
+BR <- st_read("./data/gpkg/BR_4283.gpkg") %>%  st_transform(4283)# boat ramps
+coast <- st_read("./data/gpkg/Coast_4283.gpkg") %>% st_transform(4283)# coast
 # habitat <- st_read("./data/gpkg/espHabitat_4283.gpkg") # habitat
-sites <- st_read("./data/gpkg/Sites_3857.gpkg") %>%  st_transform(4283)# MVM grid
-studySite <- st_read("./data/gpkg/StudySite_4283.gpkg") # study site (mega mvm polygon)
+sites <- st_read("./data/gpkg/mar5kmgrid.gpkg") %>%  st_transform(4283)# MVM grid
+studySite <- st_read("./data/gpkg/StudySite_4283.gpkg") %>% st_transform(4283) # study site (mega mvm polygon)
 # artInfra <- st_read("./data/gpkg/espArtInfra_4283.gpkg")
-shelter <- st_read("./data/gpkg/shelter_3857.gpkg")
-NPZ <- st_read("./data/gpkg/ntz_4283.gpkg") # commonwealth and current state NTZ
+shelter <- st_read("./data/gpkg/mar5km_shelter.gpkg") %>% st_transform(4283)
+NPZ <- st_read("./data/gpkg/ntz_4283.gpkg") %>% st_transform(4283)# commonwealth and current state NTZ
 
 ### raster - ESPG 4326 (WGS84)
 bathy <- raster("./data/raster/bathy_4326.tif") # bathy
@@ -60,6 +59,15 @@ This script add static spatial variables to all cells in a grid.
     - southern fetch (shelter)
     - commonwealth NPZ
 
+# shelter 
+Needs to be done before you manipulate IDs
+```{r}
+sites$shelter <- ifelse(sites$fid %in% shelter$fid, 1, 0)
+
+ggplot() +
+  geom_sf(data = sites, aes(fill = shelter), lwd = 0.05)
+```
+
 ## Assign unique identifier to each grid cell
 For Esperance is needs to match the mapper and add in ids for new cells. 
 ```{r gridID}
@@ -69,24 +77,14 @@ sites <- sites %>%
   st_make_valid()
 ```
 
-# shelter 
-Needs to be done before you manipulate IDs
-```{r}
-sites$shelter <- ifelse(sites$id %in% shelter$id, 1, 0)
-
-# ggplot() +
-#   geom_sf(data = sites, aes(fill = shelter), lwd = 0.05)
-```
-
-
 ## Depth
 Calculates the average depth within each grid cell (site). This does work is after grid manipulation.  
 
 ```{r depth}
 sites <- mean_depth(bathy, sites) # get average depth of grid
 
-# ggplot() +
-#   geom_sf(data = sites, aes(fill = Depth), lwd = 0.05)
+ggplot() +
+  geom_sf(data = sites, aes(fill = Depth), lwd = 0.05)
 ```
 
 ## Data prep
@@ -100,8 +98,8 @@ waterGrid <- st_difference(sites, st_combine(coast)) # isolates grid to water
 polyCentroid <- st_centroid_within_poly(waterGrid) # gets centroid of every grid cell
 waterGrid$polyCentroid <- polyCentroid$geom # bind centroid to grid sf 
 
-# ggplot() +
-#   geom_sf(data = waterGrid$polyCentroid)
+ggplot() +
+  geom_sf(data = waterGrid$polyCentroid)
 ```
 
 ## Habitat
@@ -134,12 +132,15 @@ waterGrid <- waterGrid %>%
   mutate(Shex = ifelse(as.numeric(area) <= 0.1, 1, 0))
 
 waterGrid <- waterGrid %>% 
-  mutate(commhex = ifelse(as.numeric(area) == 0.63, 1, 0))
+  mutate(commhex = ifelse(as.numeric(area) >= 22, 1, 0))
 
 # dat %>%
 #   group_by(hex) %>%
 #   summarise(sum(choice))
 #   Not enough data at small spatial scales for model to work. add this as a dummy variable instead of area.
+#   
+ggplot() +
+  geom_sf(data = waterGrid, aes(fill = commhex))
 ```
 
 ## Artificial infrastructure present
@@ -176,11 +177,11 @@ islands <- coast %>%
 waterGrid %<>%
   mutate(isl_adj = ifelse(as.list(st_intersects(waterGrid, islands)) %in% "integer(0)", 0, 1))
 
-# ggplot() +
-#   geom_sf(data = waterGrid, aes(fill = km_mainland))
-# 
-# ggplot()+
-#   geom_sf(data = waterGrid, aes(fill = isl_adj))
+ggplot() +
+  geom_sf(data = waterGrid, aes(fill = km_mainland))
+
+ggplot()+
+  geom_sf(data = waterGrid, aes(fill = isl_adj))
 ```
 
 # Fetch
@@ -219,13 +220,13 @@ Fetch was too computationally heavy for my time scale, so i've made a shape file
 ## Commonwealth NPZ
 Adding a binary variable as to whether a grid is within a NPZ, if so it will need to have 0 utility for recreational fishers. 
 ```{r}
-npz <- st_union(NPZ)
-
-npz_grids <- as.list(st_intersects(waterGrid, npz, sparse = FALSE))
-
-waterGrid <- waterGrid %>% 
-  mutate(NPZ = ifelse(npz_grids == TRUE, 1, 0))
-
+# npz <- st_union(NPZ)
+# 
+# npz_grids <- as.list(st_intersects(waterGrid, npz, sparse = FALSE))
+# 
+# waterGrid <- waterGrid %>% 
+#   mutate(NPZ = ifelse(npz_grids == TRUE, 1, 0))
+# 
 # ggplot() +
 #   geom_sf(data = waterGrid, aes(fill = NPZ), lwd = 0.05)
 ```
@@ -244,5 +245,5 @@ waterGrid <- waterGrid %>% left_join(dist, by = "gridID") # join to input data
 
 ## Save output
 ```{r save}
-saveRDS(waterGrid, "./data/gpkg/2.0_Sites_4283.gpkg")
+saveRDS(waterGrid, "./data/gpkg/2.0_5kmSites_4283.gpkg")
 ```
