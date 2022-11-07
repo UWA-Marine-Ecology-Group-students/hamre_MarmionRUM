@@ -20,6 +20,7 @@ library(magrittr)
 ## gpkg - ESPG 4283 (GDA94)
 sites <- readRDS("./data/gpkg/2.0_Sites_4283.gpkg") %>% filter(!is.na(Depth)) # sites with static attributes - checked the depth, some depths havent been calculated along lower edge, okay to filter, no recreation
 dat <- read_csv("data/01_data/1.2_dat.csv") %>% filter(ActivityType == "Extractive")
+# dat <- read_csv("data/01_data/1.2_dat.csv") %>% filter(FishingType %in% c("Casting", "Demersal"))
 BR <- st_read("./data/gpkg/BR_4283.gpkg") %>%  dplyr::select(RampID) # boat ramps
 
 sf_use_s2(FALSE)
@@ -72,9 +73,10 @@ gridID_vis <- sites %>%
 # Writing choice set to ID grids to close
 choice <- sites %>% dplyr::select(gridID_alt, geom)
 
-st_write(choice, "./data/gpkg/2.1_ChoiceSetQ_4283.gpkg", append = FALSE) # need to write with st_write to open in QGISRUMs
+# # st_write(choice, "./data/gpkg/2.1_ChoiceSetQ_4283.gpkg", append = FALSE) # need to write with st_write to open in QGISRUMs
 
-saveRDS(sites, "./data/gpkg/2.1_ChoiceSet_4283.gpkg")
+# saveRDS(sites, "./data/gpkg/2.1_ChoiceSet_4283.gpkg")
+saveRDS(sites, "./data/gpkg/2.1_ChoiceSet_dem_4283.gpkg")
 ```
 
 
@@ -142,13 +144,19 @@ dat <- dat %>%
   # mutate(centroidLat = st_coordinates(polyCentroid)[,2]) %>%
   mutate(choice = ifelse(gridID_vis == gridID_alt, 1, 0)) %>% 
   mutate(travelCost = as.numeric(0.54*km_BR)) %>% 
-  dplyr::select(-c(geom, geometry))
+  dplyr::select(-c(geom, geometry)) %>% 
+  mutate(area = as.numeric(area)) %>% 
+  filter(area != 0)
 ```
+
+
 
 # Save output
 ```{r save}
 write_csv(dat, "./data/02_data/2.1_dat.csv")
+# write_csv(dat, "./data/02_data/2.1_dat_dem.csv")
 ```
+
 
 ```{r}
 #  cor <- round(cor(dat[,c("Depth", "km_mainland", "isl_adj", "shelter", "Lhex", "Shex", "Mhex", "travelCost")], use='complete.obs'), 2)

@@ -17,8 +17,10 @@
 * read data 
 
 	clear
+	**import delimited "data/02_data/2.1_5kmdat.csv"
 	import delimited "data/02_data/2.1_dat.csv"
-
+	**import delimited "data/02_data/2.1_dat_dem.csv"
+	
 **# data prep 
 
 * making binary columns factors not numeric
@@ -442,8 +444,136 @@
 	putexcel set attmod_shex_arealog.xlsx, modify sheet(v)
 	putexcel A1 = matrix(v), rownames
 	
+**# base model 5km
+	
+	clogit choice c.travelcost c.depth arealog km_mainland fisl_adj, group(tripid)
+	estimates store attmod_base5km
+	
+	* store variance-covariance matrix 
+
+	matrix b = e(b)'
+	matrix v = e(V)
+
+	* store outputs 
+	* define directory  to store
+
+	cd "/Users/23088313/Documents/git_repos/hamre_MarmionRUM/data/03_data"
+
+	putexcel set attmod_5kmbase.xlsx, replace
+	putexcel A2 = matrix(b), rownames
+	putexcel B1 = "Vars"
+	putexcel C1 = "Coef"
+	putexcel set attmod_5kmbase.xlsx, modify sheet(v)
+	putexcel A2 = matrix(v), rownames
+	putexcel set attmod_5kmbase.xlsx, modify sheet(v)
+	putexcel A1 = matrix(v), rownames
+	* works but is verrry different to working 1km and asc
+	* --> like for like contrast between 1 km and 5km
+	
+**# 5km complete hex
+	
+	clogit choice c.travelcost c.depth commhex km_mainland fisl_adj, group(tripid)
+	estimates store attmod_5km_commhex
+	
+	* store variance-covariance matrix 
+
+	matrix b = e(b)'
+	matrix v = e(V)
+
+	* store outputs 
+	* define directory  to store
+
+	cd "/Users/23088313/Documents/git_repos/hamre_MarmionRUM/data/03_data"
+
+	putexcel set attmod_5km_commhex.xlsx, replace
+	putexcel A2 = matrix(b), rownames
+	putexcel B1 = "Vars"
+	putexcel C1 = "Coef"
+	putexcel set attmod_5km_commhex.xlsx, modify sheet(v)
+	putexcel A2 = matrix(v), rownames
+	putexcel set attmod_5km_commhex.xlsx, modify sheet(v)
+	putexcel A1 = matrix(v), rownames
+	* works but is verrry different to working 1km and asc
+	* --> like for like contrast between 1 km and 5km	
 
 	
+	
+	
+**# 1km no shelter
+	
+	clogit choice c.travelcost c.depth commhex km_mainland fisl_adj, group(tripid)
+	estimates store attmod_1km_noshelter
+	
+	* store variance-covariance matrix 
+
+	matrix b = e(b)'
+	matrix v = e(V)
+
+	* store outputs 
+	* define directory  to store
+
+	cd "/Users/23088313/Documents/git_repos/hamre_MarmionRUM/data/03_data"
+
+	putexcel set attmod_1km_noshelter.xlsx, replace
+	putexcel A2 = matrix(b), rownames
+	putexcel B1 = "Vars"
+	putexcel C1 = "Coef"
+	putexcel set attmod_1km_noshelter.xlsx, modify sheet(v)
+	putexcel A2 = matrix(v), rownames
+	putexcel set attmod_1km_noshelter.xlsx, modify sheet(v)
+	putexcel A1 = matrix(v), rownames
+	* works but is verrry different to working 1km and asc
+	* --> like for like contrast between 1 km and 5km
+	
+**# 1km, log(area+1), no shelter
+	
+	clogit choice c.travelcost c.depth arealog km_mainland fisl_adj, group(tripid)
+	estimates store attmod_1kmlogarea_noshelter
+	
+	* store variance-covariance matrix 
+
+	matrix b = e(b)'
+	matrix v = e(V)
+
+	* store outputs 
+	* define directory  to store
+
+	cd "/Users/23088313/Documents/git_repos/hamre_MarmionRUM/data/03_data"
+
+	putexcel set attmod_1kmlogarea_noshelter.xlsx, replace
+	putexcel A2 = matrix(b), rownames
+	putexcel B1 = "Vars"
+	putexcel C1 = "Coef"
+	putexcel set attmod_1kmlogarea_noshelter.xlsx, modify sheet(v)
+	putexcel A2 = matrix(v), rownames
+	putexcel set attmod_1kmlogarea_noshelter.xlsx, modify sheet(v)
+	putexcel A1 = matrix(v), rownames
+	
+	
+	
+	**# Complete hex demersal
+	
+	clogit choice c.travelcost c.depth commhex km_mainland fisl_adj fshelter, group(tripid)
+	estimates store attmod_comhex_dem
+	
+	* store variance-covariance matrix 
+
+	matrix b = e(b)'
+	matrix v = e(V)
+
+	* store outputs 
+	* define directory  to store
+
+	cd "/Users/23088313/Documents/git_repos/hamre_MarmionRUM/data/03_data"
+
+	putexcel set attmod_comhex_dem.xlsx, replace
+	putexcel A2 = matrix(b), rownames
+	putexcel B1 = "Vars"
+	putexcel C1 = "Coef"
+	putexcel set attmod_comhex_dem.xlsx, modify sheet(v)
+	putexcel A2 = matrix(v), rownames
+	putexcel set attmod_comhex_dem.xlsx, modify sheet(v)
+	putexcel A1 = matrix(v), rownames
 **********
 * line_ma - test interactions example
 	* clogit choice c.travelcost c.depth c.depthsquared area i.fisl_adj line_ma, group(tripid)
