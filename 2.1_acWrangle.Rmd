@@ -192,7 +192,7 @@ ggplot() +
   geom_sf(data = dat, size = 0.5)
 ```
 
-# Working function - needs improvment
+# Working function 
 ```{r}
 # ASCgrid function, makes automated and customisable grid for a alternative specific constant RUM. This function will create horizontal lines across a polygon, and check there is a spatial use data point in each cell. The function will iterate, making the grid gradually bigger with each iteration until there is at leats one data point in every cell. 
 
@@ -287,7 +287,181 @@ if (vert == FALSE) {
 demo <- ASCgrid(poly = state, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 30, crs = 4283, vert = FALSE) # crs using degrees
 ```
 
-# test function
+# test function simle for current purpose
+```{r}
+asc_test <- function(poly, #  sf polygon to split
+                     # ntz,
+                     sz_sim, # sf polygon of sz scenarios to simulate
+                     sz_current,# sf polygon with current sz, commonwealth and state
+                     point, # spatial use data
+                     from, # starting value of distance between grid lines
+                     by, # incrementally distance increase to iterate over
+                     min_area = 20, # min allowable area km2
+                     vert = FALSE, # make line orientation perpendicular to lines in poly
+                     crs) { # vertical or horizontal divisions
+
+  # make crs for every sf object the same 
+  poly %<>% st_transform(crs)
+  # ntz %<>% st_transform(crs)
+  sz_sim %<>% st_transform(crs)
+  sz_current %<>% st_transform(crs)
+  point %<>% st_transform(crs)
+  
+  # add npz col, all should be 1 and filled in with 0 when data expanded
+  sz_current <- sz_current %>% 
+    mutate(sz_current = 1)
+
+  # add sz col all should be 1, and row numbers for loop
+  sz_sim %<>% 
+    mutate(sz = 1) %>% 
+    mutate(id = row_number())
+  
+  # make a new binary column for each sanctuary zone
+  for (i in 1:nrow(sz_sim)) {
+    sz = ifelse(sz_sim$id == i, 1, 0)
+    sz_sim[,length(sz_sim) + 1 ] <- sz 
+    colnames(sz_sim)[ncol(sz_sim)] <- paste0("sz", i)
+  }
+  
+  # making ntz layer: combining npz and current sz with sims
+  sim_holes <- st_difference(sz_sim, st_combine(sz_current)) # cut npz out of sims
+
+  # joining sims and npz while maintaining attributes
+  sim_holes_df <- sim_holes %>% as.data.frame() %>% mutate(geom = as.character(geom))
+  sz_current_df <- sz_current %>% as.data.frame() %>% mutate(geom = as.character(geom))
+
+  ntz <- full_join(sim_holes_df, sz_current_df) %>%
+    mutate(id = row_number()) %>%
+    mutate_if(is.numeric, ~replace_na(., 0))
+
+  sim_holes_geom <- st_as_sf(sim_holes$geom)
+  npz_geom <- st_as_sf(sz_current$geom)
+
+  ntz_geom <- rbind(sim_holes_geom, npz_geom)
+
+  ntz <- cbind(ntz, ntz_geom) %>%
+    st_as_sf() %>%
+    dplyr::select(-geom) %>%
+    rename(geom = x)
+
+  # chceking to see if there is data in the sims
+  temp <- as.data.frame(st_intersects(ntz, dat, sparse = FALSE)) %>%
+      rowwise %>%
+      mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
+      ungroup()
+
+      ntz$data_present <- temp$inpoly_w_ntz
+      ntz %<>% mutate(id = row_number())
+
+      ntz %<>%
+        mutate(data_present = temp$inpoly_w_ntz,
+               id = row_number(),
+               sz_w_value = ifelse(sz == 1 & data_present == TRUE, 1, 0),
+               sz_wo_value = ifelse(sz == 1 & data_present == FALSE, 1, 0))
+  
+  # cutting ntz out of polygon to make grid in
+  poly_w_ntz <- st_difference(st_make_valid(poly), st_combine(ntz)) # crops ntz out of grid
+  
+  poly_w_ntz %<>% 
+    st_cast('MULTIPOLYGON') %>%
+    st_cast("POLYGON") 
+
+  poly_w_ntz$area <- as.numeric(round(set_units(st_area(poly_w_ntz), km^2), 2))
+  poly_w_ntz %<>% filter(area > 1)
+  
+  bbox <- st_bbox(poly_w_ntz) # make bbox
+  
+  # Grid <- seq(from = units::set_units(from, units), by = units::set_units(by, units)) # make sequence
+  Grid <- seq(from = from, by = by)
+    # makes grid & checks data presents, if not loops over next grid
+  acGrids <- data.frame()
+  
+  for (j in 1:nrow(poly_w_ntz)) {
+   
+    p <- poly_w_ntz[j,]
+    
+    print(paste("Making grid for feature", j, sep = " "))
+    
+    if (vert == FALSE) {
+    
+      for (i in Grid) {
+        grid <- p %>% st_make_grid(cellsize = c(bbox$xmax - bbox$xmin, i))
+        grid <- st_intersection(p, grid)
+        grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
+        grid %<>% filter(area > min_area)
+        temp <- as.data.frame(st_intersects(grid, point, sparse = FALSE)) %>%
+          rowwise %>%
+          mutate(inp = if_any(starts_with('V'), ~. == TRUE)) %>%
+          ungroup()
+          grid$data_present <- temp$inp
+          grid %<>% mutate(id = row_number())
+    
+          if (any(grid$data_present == FALSE)) {
+            print(paste0("Missing data (", i ,"), making new grid"))
+          } else {
+             print(paste("Feature", j, "has a", i, "Grid", sep = " "))
+            break
+          }
+        }
+    } else {
+
+       for (i in Grid) {
+        grid <- p %>% st_make_grid(cellsize = c(i, bbox$ymax - bbox$ymin))
+        grid <- st_intersection(p, grid)
+        grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
+        grid %<>% filter(area > min_area)
+        temp <- as.data.frame(st_intersects(grid, point, sparse = FALSE)) %>%
+          rowwise %>%
+          mutate(inp = if_any(starts_with('V'), ~. == TRUE)) %>%
+          ungroup()
+          grid$data_present <- temp$inp
+          grid %<>% mutate(id = row_number())
+
+          if (any(grid$data_present == FALSE)) {
+            print(paste0("Missing data (", i ,"), making new grid"))
+          } else {
+            print(paste(i, "Grid", sep = " "))
+            break
+          }
+      }
+    }
+   acGrids %<>% rbind(grid)
+  }
+  # }
+  grid <- acGrids %>% mutate(id = row_number()) %>% st_as_sf(crs = crs)
+  
+  grid_geom <- st_as_sf(grid$geom)
+  ntz_geom <- st_as_sf(ntz$geom) 
+  full_geom <- rbind(grid_geom, ntz_geom)
+
+  grid  %<>% as.data.frame() %>% mutate(geom = as.character(geom))
+  ntz %<>% as.data.frame() %>% mutate(geom = as.character(geom))
+
+  full_grid <- full_join(grid, ntz) %>%
+    mutate(id = row_number()) %>%
+    mutate_if(is.numeric, ~replace_na(., 0))
+
+  full_grid <- cbind(full_grid, full_geom) %>%
+    st_as_sf() %>%
+    dplyr::select(-geom) %>%
+    rename(geom = x)
+
+   print(
+     ggplot() +
+       geom_sf(data = full_grid, aes(fill = as.factor(sz_wo_value)), lwd = 0.5) +
+       geom_sf(data = point, size = 0.5)
+   )
+   return(full_grid)
+}
+
+
+# a <- asc_test(poly = grid_base, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 0, crs = 4283, vert = FALSE) # crs using degrees
+
+grid <- asc_test(poly = grid_base, sz_current = npz, sz_sim = sim, point = dat, from = 0.03, by = 0.02, min_area = 0, crs = 4283, vert = FALSE) # crs using degrees
+
+
+```
+# complex function - half way through getting pz and sim separated
 ```{r}
 asc_test <- function(poly, #  sf polygon to split
                      ntz,
@@ -302,16 +476,119 @@ asc_test <- function(poly, #  sf polygon to split
 
   # if (missing(poly) || missing(sz_sim) || missing(point)) {
   #   stop("Missing at least one sf file at argument, poly, ntz or point")
-  # } 
-  
-  # if (missing(sz_current)) {
-  #   stop("Missing sz_current, make sure there are no current State SZ or Commonwealth NPZs in study
-  #        site.")
   # }
-  
-  # if (class(poly) != "sf" || class(sz_sim) != "sf" || class(sz_current) != "sf" || class(point) != "sf" ) {
+  # 
+  #   if (class(poly) != "sf" || class(sz_sim) != "sf" || class(sz_current) != "sf" || class(point) != "sf" ) {
   #   stop("Poly, ntz or point is not an sf object. Change format to sf, see sf::st_as_sf()")
+  #   }
+  # 
+  # if (missing(sz_current)) {
+  #   stop("Missing sz_current, continuing assuming there none to be itegrated in the grid")
+  #   
+  # ntz <- sz_sim  
+  # # make crs for every sf object the same 
+  # poly %<>% st_transform(crs)
+  # ntz %<>% st_transform(crs)
+  # point %<>% st_transform(crs)
+  # 
+  # # add sz col all should be 1, and row numbers for loop
+  # ntz %<>% 
+  #   mutate(sz = 1) %>%
+  #   mutate(id = row_number())
+  # 
+  # # make a new binary column for each sanctuary zone
+  # for (i in 1:nrow(ntz)) {
+  #   sz = ifelse(ntz$id == i, 1, 0)
+  #   sim[,length(ntz) + 1 ] <- sz 
+  #   colnames(ntz)[ncol(ntz)] <- paste0("sz", i)
   # }
+  # 
+  # # checking to see if there is data in the sims
+  # temp <- as.data.frame(st_intersects(ntz, dat, sparse = FALSE)) %>%
+  #     rowwise %>%
+  #     mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
+  #     ungroup()
+  # 
+  #     ntz$data_present <- temp$inpoly_w_ntz
+  #     ntz %<>% mutate(id = row_number())
+  # 
+  #     ntz %<>%
+  #       mutate(data_present = temp$inpoly_w_ntz,
+  #              id = row_number(),
+  #              sz_w_value = ifelse(sz == 1 & data_present == TRUE, 1, 0),
+  #              sz_wo_value = ifelse(sz == 1 & data_present == FALSE, 1, 0))
+  # 
+  # 
+  # # cutting ntz out of polygon to make grid in
+  # poly_w_ntz <- st_difference(st_make_valid(poly), st_combine(ntz)) # crops ntz out of grid
+  # 
+  # poly_w_ntz %<>% 
+  #   st_cast('MULTIPOLYGON') %>%
+  #   st_cast("POLYGON") 
+  # 
+  # poly_w_ntz$area <- as.numeric(round(set_units(st_area(poly_w_ntz), km^2), 2))
+  # poly_w_ntz %<>% filter(area > 1)
+  # 
+  # bbox <- st_bbox(poly_w_ntz) # make bbox
+  # 
+  # # Grid <- seq(from = units::set_units(from, units), by = units::set_units(by, units)) # make sequence
+  # Grid <- seq(from = from, by = by)
+  #   # makes grid & checks data presents, if not loops over next grid
+  # acGrids <- data.frame()
+  # 
+  # for (j in 1:nrow(poly_w_ntz)) {
+  #  
+  #   p <- poly_w_ntz[j,]
+  #   
+  #   print(paste("Making grid for feature", j, sep = " "))
+  #   
+  #   if (vert == FALSE) {
+  #   
+  #     for (i in Grid) {
+  #       grid <- p %>% st_make_grid(cellsize = c(bbox$xmax - bbox$xmin, i))
+  #       grid <- st_intersection(p, grid)
+  #       grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
+  #       grid %<>% filter(area > min_area)
+  #       temp <- as.data.frame(st_intersects(grid, point, sparse = FALSE)) %>%
+  #         rowwise %>%
+  #         mutate(inp = if_any(starts_with('V'), ~. == TRUE)) %>%
+  #         ungroup()
+  #         grid$data_present <- temp$inp
+  #         grid %<>% mutate(id = row_number())
+  #   
+  #         if (any(grid$data_present == FALSE)) {
+  #           print(paste0("Missing data (", i ,"), making new grid"))
+  #         } else {
+  #            print(paste("Feature", j, "has a", i, "Grid", sep = " "))
+  #           break
+  #         }
+  #       }
+  #   } 
+  #   else {
+  # 
+  #      for (i in Grid) {
+  #       grid <- p %>% st_make_grid(cellsize = c(i, bbox$ymax - bbox$ymin))
+  #       grid <- st_intersection(p, grid)
+  #       grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
+  #       grid %<>% filter(area > min_area)
+  #       temp <- as.data.frame(st_intersects(grid, point, sparse = FALSE)) %>%
+  #         rowwise %>%
+  #         mutate(inp = if_any(starts_with('V'), ~. == TRUE)) %>%
+  #         ungroup()
+  #         grid$data_present <- temp$inp
+  #         grid %<>% mutate(id = row_number())
+  # 
+  #         if (any(grid$data_present == FALSE)) {
+  #           print(paste0("Missing data (", i ,"), making new grid"))
+  #         } else {
+  #           print(paste(i, "Grid", sep = " "))
+  #           break
+  #         }
+  #     }
+  #   }
+  #  acGrids %<>% rbind(grid)
+  # }
+  # } else {
   #   
    # make crs for every sf object the same 
   poly %<>% st_transform(crs)
@@ -403,8 +680,7 @@ asc_test <- function(poly, #  sf polygon to split
             break
           }
         }
-    } 
-    else {
+    } else {
 
        for (i in Grid) {
         grid <- p %>% st_make_grid(cellsize = c(i, bbox$ymax - bbox$ymin))
@@ -428,7 +704,7 @@ asc_test <- function(poly, #  sf polygon to split
     }
    acGrids %<>% rbind(grid)
   }
-  
+  # }
   grid <- acGrids %>% mutate(id = row_number()) %>% st_as_sf(crs = crs)
   
    print(
@@ -447,55 +723,50 @@ asc_test(poly = state, ntz = ntz, point = dat, from = 3000, by = 2000, min_area 
 
 # testing stuff to add to function
 ```{r}
-state <- st_transform(state, crs(ntz))
-st_crs(demo, parameters = TRUE)$units_gdal
-
-ggplot() +
-   # geom_sf(data = n) 
-  geom_sf(data = vert_split[1,])
-
-
-# data for env to test
-  state_holes <- st_difference(state, st_combine(ntz), gridSize = 0)
-  bbox <- st_bbox(state_holes) # make bbox
-    grid <- state_holes %>% st_make_grid(cellsize = c(bbox$xmax - bbox$xmin, 0.09))
-    grid <- st_intersection(state_holes, grid)
-    grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
-    # grid %<>% filter(area > min_area)
+# state <- st_transform(state, crs(ntz))
+# st_crs(demo, parameters = TRUE)$units_gdal
+# 
+# # data for env to test
+#   state_holes <- st_difference(state, st_combine(ntz), gridSize = 0)
+#   bbox <- st_bbox(state_holes) # make bbox
+#     grid <- state_holes %>% st_make_grid(cellsize = c(bbox$xmax - bbox$xmin, 0.09))
+#     grid <- st_intersection(state_holes, grid)
+#     grid$area <- as.numeric(round(set_units(st_area(grid), km^2), 2))
+#     # grid %<>% filter(area > min_area)
     
 # try to merge min area not filter
-  grid %<>% mutate(id = row_number(),
-                   small = ifelse(area < 45, 1, 0), 
-                   touches = st_)  
+  # grid %<>% mutate(id = row_number(),
+  #                  small = ifelse(area < 45, 1, 0), 
+  #                  touches = st_)  
+  # 
+  #   g1 <- grid %>% 
+  #     group_by() %>% 
+  #     summmarise() %>% 
+  #     ungroup()
+  #   
+  #   plot(grid)
   
-    g1 <- grid %>% 
-      group_by() %>% 
-      summmarise() %>% 
-      ungroup()
-    
-    plot(grid)
-  
-    
-    ### fix loose ends of polyu
-# a <- st_make_valid(st_buffer(ntz, .0000001))
-# 
-# c <- st_difference(state_holes, st_combine(ntz))
-# d <- st_join(c, ntz, left = TRUE, st_touches)
-# 
-# b  <-   st_difference(state_holes, st_combine(ntz))
-# 
-# d <- st_snap(x = state, y = ntz, tolerance = 0.001) 
+# mergeing sz data to grid 
+ # joining sims and npz while maintaining attributes
 
-e <- st_join(state, ntz, join = st_touches)
+  acGrid_geom <- st_as_sf(acGrid$geom)
+  ntz_geom <- st_as_sf(ntz$geom) 
+  full_geom <- rbind(acGrid_geom, ntz_geom)
 
-# vert_split %<>% st_transform(crs(ntz))
-# 
-# state_holes <- st_difference(state, st_combine(ntz)) # cut npz out of sims
-# 
-# vert_split_holes_df <- vert_split_holes %>% as.data.frame() %>% mutate(id = row_number()) %>%  mutate(geom = as.character(geom))
+  acGrid  %<>% as.data.frame() %>% mutate(geom = as.character(geom))
+  ntz %<>% as.data.frame() %>% mutate(geom = as.character(geom))
 
-ggplot()+
-  geom_sf(data = grid_base)
+  full_grid <- full_join(acGrid, ntz) %>%
+    mutate(id = row_number()) %>%
+    mutate_if(is.numeric, ~replace_na(., 0))
+
+  full_grid <- cbind(full_grid, full_geom) %>%
+    st_as_sf() %>%
+    dplyr::select(-geom) %>%
+    rename(geom = x)
+
+ggplot() +
+  geom_sf(data = full_grid, aes(fill = as.factor(sz_wo_value)))
 ```
 
 
