@@ -288,6 +288,14 @@ asc_test <- function(poly, #  sf polygon to split
   
   # ntz %<>% st_buffer( 0) %>% st_buffer(0.0001) %>% st_make_valid()
   poly_w_ntz <- st_difference(st_make_valid(poly), st_combine(ntz)) # crops ntz out of grid
+  
+  poly_w_ntz %<>% 
+    st_cast('MULTIPOLYGON') %>%
+    st_cast("POLYGON") 
+
+  poly_w_ntz$area <- as.numeric(round(set_units(st_area(poly_w_ntz), km^2), 2))
+  poly_w_ntz %<>% filter(area > 1)
+  
   bbox <- st_bbox(poly_w_ntz) # make bbox
   
   # Grid <- seq(from = units::set_units(from, units), by = units::set_units(by, units)) # make sequence
@@ -376,7 +384,7 @@ asc_test <- function(poly, #  sf polygon to split
 }
 
 
-asc_test(poly = vert_split, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 30, crs = 4283, vert = FALSE) # crs using degrees
+asc_test(poly = vert_split, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 0, crs = 4283, vert = FALSE) # crs using degrees
 
 asc_test(poly = state, ntz = ntz, point = dat, from = 3000, by = 2000, min_area = 30, crs = 28350, vert = FALSE) 
 ```
@@ -385,7 +393,7 @@ asc_test(poly = state, ntz = ntz, point = dat, from = 3000, by = 2000, min_area 
 ```{r}
 
 
-a <- st_transform(state, 28350)
+state <- st_transform(state, crs(ntz))
 st_crs(demo, parameters = TRUE)$units_gdal
 
 ggplot() +
@@ -394,7 +402,7 @@ ggplot() +
 
 
 # data for env to test
-  state_holes <- st_difference(state_holes, st_combine(ntz), gridSize = 0)
+  state_holes <- st_difference(state, st_combine(ntz), gridSize = 0)
   bbox <- st_bbox(state_holes) # make bbox
     grid <- state_holes %>% st_make_grid(cellsize = c(bbox$xmax - bbox$xmin, 0.09))
     grid <- st_intersection(state_holes, grid)
@@ -449,10 +457,17 @@ e <- st_join(state, ntz, join = st_touches)
 #   mutate(ntz = ifelse(npz == 1 | sz == 1, 1, 0))
 
 a <- base_grid %>% filter(ntz != 1)
+state <- st_transform(state, crs(ntz))
 
-a <- demo %>% 
-  st_cast('MULTIPOLYGON') %>%
-  st_cast("POLYGON")
+  state_hole <- st_difference(st_make_valid(state), st_combine(ntz)) # crops ntz out of grid
+  
+  state_hole %<>% 
+    st_cast('MULTIPOLYGON') %>%
+    st_cast("POLYGON") 
+
+  state_hole$area <- as.numeric(round(set_units(st_area(state_hole), km^2), 2))
+  a <- state_hole %>% filter(area > 1) %>% mutate(id = row_numbe)
+
 
 ntz_buffer <- ntz %>% st_buffer(0.000001, join = "MITRE") %>% st_make_valid()
 
@@ -461,10 +476,12 @@ b <- st_difference(st_make_valid(vert_split), st_combine(st_make_valid(ntz)))
 c <- demo %>% drop_crumbs(threshold = 1000000)
 
 ggplot()+
-  # geom_sf(data = state) +
+  geom_sf(data = a, aes(fill = as.factor(id)))
   # geom_sf(data = ntz_buffer) 
-  geom_sf(data = b, fill = "red")
-  geom_sf(data = c, aes(fill = as.factor(id)))
+  # geom_sf(data = b, fill = "red")
+  # geom_sf(data = c, aes(fill = as.factor(id)))
+
+a %>% arrange(desc(area))
 ```
 
 
