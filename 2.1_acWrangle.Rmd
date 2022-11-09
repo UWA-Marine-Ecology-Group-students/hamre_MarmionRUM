@@ -745,28 +745,9 @@ asc_test(poly = state, ntz = ntz, point = dat, from = 3000, by = 2000, min_area 
   #     ungroup()
   #   
   #   plot(grid)
-  
-# mergeing sz data to grid 
- # joining sims and npz while maintaining attributes
-
-  acGrid_geom <- st_as_sf(acGrid$geom)
-  ntz_geom <- st_as_sf(ntz$geom) 
-  full_geom <- rbind(acGrid_geom, ntz_geom)
-
-  acGrid  %<>% as.data.frame() %>% mutate(geom = as.character(geom))
-  ntz %<>% as.data.frame() %>% mutate(geom = as.character(geom))
-
-  full_grid <- full_join(acGrid, ntz) %>%
-    mutate(id = row_number()) %>%
-    mutate_if(is.numeric, ~replace_na(., 0))
-
-  full_grid <- cbind(full_grid, full_geom) %>%
-    st_as_sf() %>%
-    dplyr::select(-geom) %>%
-    rename(geom = x)
 
 ggplot() +
-  geom_sf(data = full_grid, aes(fill = as.factor(sz_wo_value)))
+  geom_sf(data = grid, aes(fill = as.factor(id)))
 ```
 
 
@@ -775,13 +756,13 @@ ggplot() +
 # Prep data
 ```{r}
 # Site daat (AC grid)
-sites <- sites %>% 
-  mutate(SZ = ifelse(SZ1 %in% 1, 1, 
-                     ifelse(SZ2 %in% 1, 1,
-                            ifelse(SZ3 %in% 1, 1, 
-                                   ifelse(SZ4 %in% 1, 1,
-                                          ifelse(SZ5 %in% 1, 1, 0)))))) %>% # binary SZ  var
-  mutate(gridID = row_number()) # adding unique ID
+# sites <- sites %>% 
+#   mutate(SZ = ifelse(SZ1 %in% 1, 1, 
+#                      ifelse(SZ2 %in% 1, 1,
+#                             ifelse(SZ3 %in% 1, 1, 
+#                                    ifelse(SZ4 %in% 1, 1,
+#                                           ifelse(SZ5 %in% 1, 1, 0)))))) %>% # binary SZ  var
+#   mutate(gridID = row_number()) # adding unique ID
   
 site_centroid <- st_centroid_within_poly(sites) # gets centroid of every grid cell
 sites$site_centroid <- site_centroid$geom # appending centroid
