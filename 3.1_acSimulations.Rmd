@@ -20,16 +20,8 @@ library(rgdal)
 library(sf)
 
 # data
-dat <- readRDS("./data/gpkg/2.1_acChoiceSet_4283.gpkg")  # this is the generalised data with static site attributes
+dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_4283.gpkg")  # this is the generalised data with static site attributes
 BRtrips <- readRDS("./data/gpkg/2.1_BRtrips.gpkg") # This is produced by the "TripAllocation.R" script (Matt)
-
-# Data with coefficients from model using trip data
-b <- read_excel("./data/03_data/ac_mod.xlsx") %>% dplyr::select(Vars, Coef)
- 
-# covariance matrix
-v <- read_excel("./data/03_data/ac_mod.xlsx", sheet = "v", col_names = rep("x", 8)) %>% 
-  dplyr::select(-x...1 ) %>% 
-  distinct()
 
 # Plotting
 mp <- st_read("./data/gpkg/pmmp_4326.gpkg")
@@ -58,6 +50,42 @@ grid <- dat %>% as.data.frame() %>%
  col <- c("#d38685") 
 ```
 
+# RUM coef
+b: coef
+v: covarience matrix
+```{r}
+# sim <- "sim_og"
+# b <- read_excel("./data/03_data/ac_sim_og.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/ac_sim_og.xlsx", sheet = "v", col_names = rep("x", 7)) %>% 
+#   dplyr::select(-x...1 ) %>% 
+#   distinct()
+#   
+# sim <- "sim1"
+# b <- read_excel("./data/03_data/ac_sim1.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/ac_sim1.xlsx", sheet = "v", col_names = rep("x", 7)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+#   
+# sim <- "sim2"
+# b <- read_excel("./data/03_data/ac_sim2.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/ac_sim2.xlsx", sheet = "v", col_names = rep("x", 7)) %>% 
+#   dplyr::select(-x...1 ) %>% 
+#   distinct()
+#   
+
+# sim <- "sim3"
+# b <- read_excel("./data/03_data/ac_sim3.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/ac_sim3.xlsx", sheet = "v", col_names = rep("x", 6)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+
+sim <- "sim4"
+b <- read_excel("./data/03_data/ac_sim4.xlsx") %>% dplyr::select(Vars, Coef)
+v <- read_excel("./data/03_data/ac_sim4.xlsx", sheet = "v", col_names = rep("x", 7)) %>%
+  dplyr::select(-x...1 ) %>%
+  distinct()
+```
+
 # Rearrange data
 Aim is to have matrix with same row names and column names
 ```{r rearrange, include = FALSE}
@@ -73,7 +101,7 @@ Aim is to have matrix with same row names and column names
 Generates coefficients drawn from within the ci of each variable.
 ```{r error, include = FALSE}
 # number of samples (all estimates)
-    n1 <- 1000
+    n1 <- 100
 
 # draws n1 numbers (nrow) from within a multivariate normal distribution for each variable (length)
 # mu = vector of means, Sigma = covarience matrix
@@ -92,7 +120,8 @@ We expect recreator  (i) to choose the site (j) with the highest expected utilit
 ```{r utility, include = FALSE}
 
 # define vars used in RUM
-     vars <- c("travelCost", "SZ1", "SZ2", "SZ3","SZ4", "SZ5")
+  sz_vars <- dat %>% dplyr::select(num_range("sz", 1:10))
+  vars <- c("travelCost", names(sz_vars))
     
 # turn defined vars into matrix from dat, make sure there is no geometry
     rum_matrix <- as.matrix(dat[, vars]) 
@@ -131,9 +160,6 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
     
     # applying probability function to every utility cell in Vj by boat ramp
 
-    # npz <- dat %>%  filter(NPZ == 1)
-
-    # Vj[Vj$ID %in% npz$gridID_alt, cols] <- 0
     p <- Vj[ , lapply(.SD, f1), by = br, .SDcols = c(cols, "ID")] 
     p <- p[order(br, ID)]
     dat %<>% arrange(BR, gridID_alt)
@@ -161,10 +187,14 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
 # Sim 1
 ```{r closures, include = FALSE}
 # Assign closures
-ntz <- c(2, 5, 10, 15, 12)
+  sz_vars <- dat %>% 
+    dplyr::select(gridID_alt, sz) %>% 
+    filter(sz == 1) %>% 
+    distinct(gridID_alt)
+  
+   ntz <- unique(sz_vars$gridID_alt) 
+
 # Calculate probability of visit and logsums: post-simulation
-    
-    # Vj[Vj$ID %in% npz$gridID_alt, cols] <- 0
     Vj[Vj$ID %in% ntz, cols] <- 0
     p <- Vj[ , lapply(.SD, f1), by = br, .SDcols = c(cols, "ID")]
     p <- p[order(br, ID)]
@@ -214,10 +244,10 @@ ntz <- c(2, 5, 10, 15, 12)
                 "Annual upper welfare impact per trip ($)" = round(sum(w.upp), 2))
 
     W_impact_trip
-    png("./plots/ASC RUM/ac_s1_impact_trip.png", height = 50*nrow(W_impact_trip), width =
-          200*ncol(W_impact_trip))
-    grid.table(W_impact_trip)
-    dev.off()
+    # png("./plots/ASC RUM/ac_sim_og_impact_trip.png", height = 50*nrow(W_impact_trip), width =
+    #       200*ncol(W_impact_trip))
+    # grid.table(W_impact_trip)
+    # dev.off()
 
 # save output
   # write.csv(dat, "./ignore/03_data/3.1_Wsimdat.csv")
@@ -280,14 +310,17 @@ the probability of visiting each grid (by annually) given a particular boat ramp
 ```{r totW, include = FALSE}
 W_impact <- RUM_W %>% summarise(round(across(starts_with(c("welf_low", "welf_mean","welf_upp")), sum)))
 
-W_impact %<>%  rename("Annual lower welfare impact ($)" = welf_low_low_TRIPS_Grvt__5,
-                      "Annual mean welfare impact ($)" = welf_mean_TRIPS_ramp_prop_Grvt__5,
-                      "Annual upper welfare impact ($)" = welf_upp_upp_TRIPS_Grvt__5)
+W_impact %<>%  rename("Annual lower impact ($)" = welf_low_low_TRIPS_Grvt__5,
+                      "Annual mean  impact ($)" = welf_mean_TRIPS_ramp_prop_Grvt__5,
+                      "Annual upper impact ($)" = welf_upp_upp_TRIPS_Grvt__5)
 
 W_impact
 png("./plots/ASC RUM/ac_s1.W_impact.png", height = 50*nrow(W_impact), width = 200*ncol(W_impact))
 grid.table(W_impact)
 dev.off()
+
+
+
 ```
 
 ```{r sc_spimpact, include = FALSE}
@@ -354,6 +387,7 @@ RUM_grid %<>%
 # presim
 # postsim
 # diff
+#
 ```
 
 
@@ -367,7 +401,7 @@ presim <- ggplot(RUM_grid) +
   ggtitle(" Pre-simulation ")
 
 
-ggsave(path = "./plots/ASC RUM", filename = paste("ac_sim1.presim.png", sep = ''), width = 8, height = 4)
+# ggsave(path = "./plots/ASC RUM", filename = paste("ac_sim_og.presim.png", sep = ''), width = 8, height = 4)
 
 postsim <- ggplot(RUM_grid) +
       xlab("Longitude") + ylab("Latitude") +
@@ -380,7 +414,7 @@ postsim <- ggplot(RUM_grid) +
   # geom_sf(data = NPZ, lwd = 0.25) +
   # geom_sf(data = sp_mpbr, color = 'red', fill = 'red', size = 0.5)
 
-ggsave(path = "./plots/ASC RUM", filename = paste("ac_sim1.postsim.png", sep = ''), width = 8, height = 4)
+# ggsave(path = "./plots/ASC RUM", filename = paste("ac_sim_og.postsim.png", sep = ''), width = 8, height = 4)
 
 diff <- ggplot(RUM_grid) +
       xlab("Longitude") + ylab("Latitude") +
@@ -393,12 +427,22 @@ diff <- ggplot(RUM_grid) +
   geom_sf(data = BRtrips, color = 'red', fill = 'red', size = 0.5) 
   # geom_sf(data = sim, lwd = 0.05, fill = "black")
 
-ggsave(path = "./plots/ASC RUM", filename = paste("ac_sim1.diff.png", sep = ''), width = 8, height = 4)
+# ggsave(diff, path = "./plots/ASC RUM", filename = paste("ac_sim_og.diff.png", sep = ''), width = 8, height = 4)
 
 presim
 postsim
 diff
 ```
+
+# save outputs
+```{r}
+ggsave(presim, path = "./plots/ASC RUM", filename = paste("acPresim_", sim, ".png", sep = ''), width = 4, height = 4)
+
+ggsave(postsim, path = "./plots/ASC RUM", filename = paste("acPostsim_", sim, ".png", sep = ''), width = 4, height = 4)
+
+ggsave(diff, path = "./plots/ASC RUM", filename = paste("acDiff_", sim, ".png", sep = ''), width = 4, height = 4)
+```
+
 
 ## Welfare impacts per boat ramp
 ```{r welfare_bar, include = FALSE}
@@ -430,6 +474,7 @@ diff
 # png("./plots/sim1.W_BRimpact.png", height = 50*nrow(W_BRimpact), width = 150*ncol(W_BRimpact))
 # grid.table(W_BRimpact)
 # dev.off()
+
 ```
 
 ```{r}

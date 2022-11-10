@@ -26,7 +26,8 @@ sites <- st_read("./data/gpkg/ac_grid_4283.gpkg")
 BR <- st_read("./data/gpkg/BR_4283.gpkg") # boat ramps
 BRtrips <- readRDS("./data/gpkg/2.1_BRtrips.gpkg")
 npz <- readRDS("./data/gpkg/2.1_acNPZ_4283.gpkg")
-sim <- st_read("./data/gpkg/sim_og.gpkg")
+sim <- st_read("./data/gpkg/sim_4.gpkg")
+sim_name <- "sim4"
 # comm <- st_read("./data/gpkg/commwater.gpkg")
 # state <- st_read("./data/gpkg/statewater.gpkg")
 grid_base <- st_read("./data/gpkg/mar_acBase.gpkg")
@@ -51,6 +52,22 @@ sf_use_s2(FALSE)
 #   geom_sf(data = sim) +
 #   geom_sf(data = npz, fill = 'blue') +
 #   geom_sf(data = BR)
+#   
+# defualt figure
+  ax.title <- 14
+  ax.text <- 9
+  ax.legend <- 12
+  strip <- 9
+  a4_width <- 160
+  my_theme <- theme_classic() + theme( axis.text = element_text(size = ax.text),
+                                    text = element_text(size = ax.text),
+                                    axis.title = element_text(size = ax.title),
+                                    line = element_line(size = 0.3),
+                                    strip.background = element_rect(colour = "white", fill =
+                                                                      "gray80"),
+                                    strip.text = element_text(size = strip))
+
+ col <- c("#d38685") 
 ```
 
 # Make choice set (grid)
@@ -61,31 +78,30 @@ sf_use_s2(FALSE)
 # lapply(sf_obj, st_transform, crs = 4283) # FIX: doesnt work sim still a different crs
 
 # add npz col, all should be 1 and filled in with 0 when data expanded
-npz <- npz %>% 
-  mutate(npz = 1)
+# npz <- npz %>% 
+#   mutate(npz = 1)
 
 # add sz col all should be 1, and row numbers for loop
-sim %<>% 
-  mutate(sz = 1) %>%
-  mutate(id = row_number())
-
-# make a new binary column for each sanctuary zone
-for (i in 1:nrow(sim)) {
-  sz = ifelse(sim$id == i, 1, 0)
-  sim[,length(sim) + 1 ] <- sz 
-  colnames(sim)[ncol(sim)] <- paste0("sz", i)
-}
-
-# removing unecessary attributes
-comm %<>% dplyr::select(geom) %>% st_transform(crs(sim))
-
-state %<>% dplyr::select(geom) %>% st_transform(crs(sim))
-
-ggplot()+
-  geom_sf(data = state) +
-  geom_sf(data = sim, aes(fill = id))
+# sim %<>% 
+#   mutate(sz = 1) %>%
+#   mutate(id = row_number())
+# 
+# # make a new binary column for each sanctuary zone
+# for (i in 1:nrow(sim)) {
+#   sz = ifelse(sim$id == i, 1, 0)
+#   sim[,length(sim) + 1 ] <- sz 
+#   colnames(sim)[ncol(sim)] <- paste0("sz", i)
+# }
+# 
+# # removing unecessary attributes
+# comm %<>% dplyr::select(geom) %>% st_transform(crs(sim))
+# 
+# state %<>% dplyr::select(geom) %>% st_transform(crs(sim))
+# 
+# ggplot()+
+#   geom_sf(data = state) +
+#   geom_sf(data = sim, aes(fill = id))
 ```
-
 
 # turning bathy into contours
 ```{r}
@@ -105,7 +121,7 @@ ggplot()+
 # vert_split <- st_split(water, state_line) # splitting by lines
 # vert_split <- st_collection_extract(vert_split) # extract list
 
-vert_split <- rbind(comm, state)
+# vert_split <- rbind(comm, state)
 
 # ggplot() +
 #   geom_sf(data = vert_split)
@@ -114,82 +130,82 @@ vert_split <- rbind(comm, state)
 ```
 # Make base grid
 ```{r}
-sim %<>% st_transform(crs(npz))
-
-sim_holes <- st_difference(sim, st_combine(npz)) # cut npz out of sims
-
-# joining sims and npz while maintaining attributes
-sim_holes_df <- sim_holes %>% as.data.frame() %>% mutate(geom = as.character(geom))
-npz_df <- npz %>% as.data.frame() %>% mutate(geom = as.character(geom))
-
-ntz <- full_join(sim_holes_df, npz_df) %>% 
-  mutate(id = row_number()) %>% 
-  mutate_if(is.numeric, ~replace_na(., 0))
-
-sim_holes_geom <- st_as_sf(sim_holes$geom)
-npz_geom <- st_as_sf(npz$geom)
-
-ntz_geom <- rbind(sim_holes_geom, npz_geom)
-
-ntz <- cbind(ntz, ntz_geom) %>% 
-  st_as_sf() %>% 
-  dplyr::select(-geom) %>% 
-  rename(geom = x)
-
-  temp <- as.data.frame(st_intersects(ntz, dat, sparse = FALSE)) %>% 
-      rowwise %>%
-      mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
-      ungroup()
-  
-      ntz$data_present <- temp$inpoly_w_ntz
-      ntz %<>% mutate(id = row_number()) 
-      
-      ntz %<>% 
-        mutate(data_present = temp$inpoly_w_ntz,
-               id = row_number(),
-               sz_w_value = ifelse(sz == 1 & data_present == TRUE, 1, 0),
-               sz_wo_value = ifelse(sz == 1 & data_present == FALSE, 1, 0))
-      
-      
-
-
-
-# nrow(ntz) == nrow(npz) + nrow(sim) # TRUE
-  
-vert_split %<>% st_transform(crs(ntz))
-
-vert_split_holes <- st_difference(vert_split, st_combine(ntz)) # cut npz out of sims
-
-vert_split_holes_df <- vert_split_holes %>% as.data.frame() %>% mutate(id = row_number()) %>%  mutate(geom = as.character(geom))
-ntz_df <- ntz %>% as.data.frame() %>% mutate(geom = as.character(geom))
-
-base_grid <- full_join(vert_split_holes_df, ntz_df) %>% 
-  mutate(id = row_number()) %>% 
-  mutate_if(is.numeric, ~replace_na(., 0))
-
-vert_split_holes_geom <- st_as_sf(vert_split_holes$geom)
-ntz_geom <- st_as_sf(ntz$geom)
-
-base_grid_geom <- rbind(vert_split_holes_geom, ntz_geom)
-
-base_grid <- cbind(base_grid, base_grid_geom) %>% 
-  st_as_sf() %>% 
-  dplyr::select(-geom) %>% 
-  rename(geom = x) %>% 
-  mutate(ntz = ifelse(npz == 1 | sz == 1, 1, 0))
-
-
-
-# checks
-nrow(base_grid) == nrow(vert_split) + nrow(ntz) # TRUE
-
-# check geometries
-ggplot() +
-  geom_sf(data = base_grid, aes(color = as.factor(sz), fill = as.factor(npz)))
-
-ggplot() +
-  geom_sf(data = ntz, aes(fill = as.factor(sz_w_value)))
-  geom_sf(data = dat, size = 0.5)
+# sim %<>% st_transform(crs(npz))
+# 
+# sim_holes <- st_difference(sim, st_combine(npz)) # cut npz out of sims
+# 
+# # joining sims and npz while maintaining attributes
+# sim_holes_df <- sim_holes %>% as.data.frame() %>% mutate(geom = as.character(geom))
+# npz_df <- npz %>% as.data.frame() %>% mutate(geom = as.character(geom))
+# 
+# ntz <- full_join(sim_holes_df, npz_df) %>% 
+#   mutate(id = row_number()) %>% 
+#   mutate_if(is.numeric, ~replace_na(., 0))
+# 
+# sim_holes_geom <- st_as_sf(sim_holes$geom)
+# npz_geom <- st_as_sf(npz$geom)
+# 
+# ntz_geom <- rbind(sim_holes_geom, npz_geom)
+# 
+# ntz <- cbind(ntz, ntz_geom) %>% 
+#   st_as_sf() %>% 
+#   dplyr::select(-geom) %>% 
+#   rename(geom = x)
+# 
+#   temp <- as.data.frame(st_intersects(ntz, dat, sparse = FALSE)) %>% 
+#       rowwise %>%
+#       mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
+#       ungroup()
+#   
+#       ntz$data_present <- temp$inpoly_w_ntz
+#       ntz %<>% mutate(id = row_number()) 
+#       
+#       ntz %<>% 
+#         mutate(data_present = temp$inpoly_w_ntz,
+#                id = row_number(),
+#                sz_w_value = ifelse(sz == 1 & data_present == TRUE, 1, 0),
+#                sz_wo_value = ifelse(sz == 1 & data_present == FALSE, 1, 0))
+#       
+#       
+# 
+# 
+# 
+# # nrow(ntz) == nrow(npz) + nrow(sim) # TRUE
+#   
+# vert_split %<>% st_transform(crs(ntz))
+# 
+# vert_split_holes <- st_difference(vert_split, st_combine(ntz)) # cut npz out of sims
+# 
+# vert_split_holes_df <- vert_split_holes %>% as.data.frame() %>% mutate(id = row_number()) %>%  mutate(geom = as.character(geom))
+# ntz_df <- ntz %>% as.data.frame() %>% mutate(geom = as.character(geom))
+# 
+# base_grid <- full_join(vert_split_holes_df, ntz_df) %>% 
+#   mutate(id = row_number()) %>% 
+#   mutate_if(is.numeric, ~replace_na(., 0))
+# 
+# vert_split_holes_geom <- st_as_sf(vert_split_holes$geom)
+# ntz_geom <- st_as_sf(ntz$geom)
+# 
+# base_grid_geom <- rbind(vert_split_holes_geom, ntz_geom)
+# 
+# base_grid <- cbind(base_grid, base_grid_geom) %>% 
+#   st_as_sf() %>% 
+#   dplyr::select(-geom) %>% 
+#   rename(geom = x) %>% 
+#   mutate(ntz = ifelse(npz == 1 | sz == 1, 1, 0))
+# 
+# 
+# 
+# # checks
+# nrow(base_grid) == nrow(vert_split) + nrow(ntz) # TRUE
+# 
+# # check geometries
+# ggplot() +
+#   geom_sf(data = base_grid, aes(color = as.factor(sz), fill = as.factor(npz)))
+# 
+# ggplot() +
+#   geom_sf(data = ntz, aes(fill = as.factor(sz_w_value)))
+#   geom_sf(data = dat, size = 0.5)
 ```
 
 # Working function 
@@ -438,7 +454,7 @@ asc_test <- function(poly, #  sf polygon to split
   ntz %<>% as.data.frame() %>% mutate(geom = as.character(geom))
 
   full_grid <- full_join(grid, ntz) %>%
-    mutate(id = row_number()) %>%
+    mutate(gridID_alt = row_number()) %>%
     mutate_if(is.numeric, ~replace_na(., 0))
 
   full_grid <- cbind(full_grid, full_geom) %>%
@@ -448,8 +464,14 @@ asc_test <- function(poly, #  sf polygon to split
 
    print(
      ggplot() +
-       geom_sf(data = full_grid, aes(fill = as.factor(sz_wo_value)), lwd = 0.5) +
+       geom_sf(data = full_grid, aes(fill = as.factor(sz_w_value),
+                                     color = as.factor(sz_wo_value)), lwd = 0.5) +
        geom_sf(data = point, size = 0.5)
+   )
+   
+    print(
+     ggplot() +
+       geom_sf(data = full_grid, aes(fill = as.factor(id)), lwd = 0.5)
    )
    return(full_grid)
 }
@@ -458,8 +480,6 @@ asc_test <- function(poly, #  sf polygon to split
 # a <- asc_test(poly = grid_base, ntz = ntz, point = dat, from = 0.03, by = 0.02, min_area = 0, crs = 4283, vert = FALSE) # crs using degrees
 
 grid <- asc_test(poly = grid_base, sz_current = npz, sz_sim = sim, point = dat, from = 0.03, by = 0.02, min_area = 0, crs = 4283, vert = FALSE) # crs using degrees
-
-
 ```
 # complex function - half way through getting pz and sim separated
 ```{r}
@@ -746,46 +766,79 @@ asc_test(poly = state, ntz = ntz, point = dat, from = 3000, by = 2000, min_area 
   #   
   #   plot(grid)
 
-ggplot() +
-  geom_sf(data = grid, aes(fill = as.factor(id)))
+# ggplot() +
+#   geom_sf(data = grid, aes(fill = as.factor(id)))
 ```
 
+```{r}
+# acAtt <- function(grid, # sf object of acGrid
+#                   point, # sf object of point data
+#                   BR, # sf object of boat ramps in study site
+#                   crs) # crs 
+# {
+#   grid %<>% st_transform(crs = crs)
+#   point %<>% st_transform(crs = crs)
+#   BR %<>% st_transform(crs = crs)
+#   
+#   centroid <- st_centroid_within_poly(grid) # gets centroid of every grid cell
+#   grid$centroid <- centroid$geom # appending centroid
+#   
+#   # getting distance from each boat rampe to the centroid of the sites
+#   # BR <- st_transform(BR, crs(grid))
+#   # dist <- as.data.frame(set_units(st_distance(grid$centroid, BR), km)) 
+#   # names(dist) <- unique(BR$RampID)
+#   # gridID <- sites$gridID
+#   # dist$gridID <- gridID
+#   # dist <- dist %>% gather("BR", "site.centroid_km.BR", 1:length(dist) - 1) 
+#   # sites <- sites %>% left_join(dist, by = "gridID") # join 
+#   
+#   return(grid)
+# }
+# 
+# acAtt(grid, dat, 4283)
+```
+```{r}
+# sz_value <- grid %>% 
+#   pivot_longer(cols = starts_with("sz_w"), names_to = c("szValue")) %>% 
+#   mutate(szValue = ifelse(szValue %in% "sz_w_value", "Yes", "No"))
+# 
+#   mutate(szValue = ifelse(sz_w_value == 1, "Yes", "No"))
+#   
+# szValue <- ggplot() +
+#   geom_sf(data = grid,
+#           aes(fill = as.factor(sz_w_value))) +
+#   geom_sf(data = grid, alpha = 0) +
+#   geom_sf(data = grid, aes(color = as.factor(sz_wo_value)), alpha = 0)
+```
 
 
 ##########################
 # Prep data
 ```{r}
-# Site daat (AC grid)
-# sites <- sites %>% 
-#   mutate(SZ = ifelse(SZ1 %in% 1, 1, 
-#                      ifelse(SZ2 %in% 1, 1,
-#                             ifelse(SZ3 %in% 1, 1, 
-#                                    ifelse(SZ4 %in% 1, 1,
-#                                           ifelse(SZ5 %in% 1, 1, 0)))))) %>% # binary SZ  var
-#   mutate(gridID = row_number()) # adding unique ID
   
-site_centroid <- st_centroid_within_poly(sites) # gets centroid of every grid cell
-sites$site_centroid <- site_centroid$geom # appending centroid
+site_centroid <- st_centroid_within_poly(grid) # gets centroid of every grid cell
+grid$site_centroid <- site_centroid$geom # appending centroid
 
 # getting distance from each boat rampe to the centroid of the sites
-BR <- st_transform(BR, crs(sites))
-dist <- as.data.frame(set_units(st_distance(sites$site_centroid, BR), km)) 
+BR <- st_transform(BR, crs(grid))
+dist <- as.data.frame(set_units(st_distance(grid$site_centroid, BR), km)) 
 names(dist) <- unique(BR$RampID)
-gridID <- sites$gridID
-dist$gridID <- gridID
+gridID_alt <- grid$gridID_alt
+dist$gridID_alt <- gridID_alt
 dist <- dist %>% gather("BR", "site.centroid_km.BR", 1:length(dist) - 1) 
-sites <- sites %>% left_join(dist, by = "gridID") # join 
+grid <- grid %>% left_join(dist, by = "gridID_alt") # join 
 
-sites <- sites |> st_sf() |> # wont work without st_sf()
-  rename(gridID_alt = gridID) %>%
+grid <- grid |> st_sf() |> # wont work without st_sf()
   dplyr::select(-site_centroid) 
 
 
-gridID_vis <- sites %>% 
+gridID_vis <- grid %>% 
   dplyr::select(gridID_alt, geom) %>% 
   distinct() 
 
-st_write(gridID_vis, "./data/gpkg/2.1_acChoiceSetQ_4283.gpkg", append = FALSE) # need to write with st_write to open in QGISRUMs
+st_write(gridID_vis, 
+         paste0("./data/gpkg/2.1_acChoiceSetQ", sim_name, "_4283.gpkg"), 
+         append = FALSE) # need to write with st_write to open in QGISRUMs
 # check 
 # ggplot() +
 #   geom_sf(data = sites$geom, aes(fill = sites$SZ)) +
@@ -794,7 +847,7 @@ st_write(gridID_vis, "./data/gpkg/2.1_acChoiceSetQ_4283.gpkg", append = FALSE) #
 
 ```{r}
 # Use spatial points
-dat <- st_crop(dat, sites) # removing outliers
+dat <- st_crop(dat, grid) # removing outliers
 
 # need one trip per row (longest site visited on trip)
 dat <- dat %>% 
@@ -823,17 +876,19 @@ dat <- dat %>%
 
 # which(is.na(dat$gridID_vis)==TRUE)
 # this chunk should give you a data set with one trip per row, with a few trip/fisher attributes and the ID of visited grids 
+# 
+# 
 ```
 
 # Join data
 ```{r join}
 og_dat <- dat # copying original data test join
 
-dat <- inner_join(dat, sites, by = "BR") # FALSE
+dat <- inner_join(dat, grid, by = "BR") # FALSE
 
 # testing join
 a <- as.data.frame(table(og_dat$BR)) %>% rename(launches = Freq)
-b <- as.data.frame(table(sites$BR)) %>%  rename(n_sites = Freq)
+b <- as.data.frame(table(grid$BR)) %>%  rename(n_sites = Freq)
 c <- left_join(a, b)
 c$times <- c$launches*c$n_sites
 test = sum(c$times)
@@ -891,11 +946,52 @@ dat <- dat %>%
   dplyr::select(-c(geometry, site.centroid_km.BR, use.centroid_km.BR))
 ```
 
+# filtering out current sz and sim sz with no value
 ```{r}
-saveRDS(dat, "./data/gpkg/2.1_acChoiceSet_4283.gpkg")
-```
+dat_rum <- dat %>% 
+  filter(sz_current != 1, sz_wo_value != 1)
 
+sz_to_remove <- dat_rum %>% 
+  dplyr::select(num_range("sz", 1:10)) %>% 
+  summarise_all(sum) 
+
+sz_to_remove <- names(sz_to_remove[, which(sz_to_remove %in% 0)])
+ 
+dat_rum_sf <- dat_rum %>% dplyr::select(-c(sz_to_remove))
+dat_rum_df <- dat_rum %>% dplyr::select(-c(sz_to_remove, sz_current, sz_wo_value, geom))
+
+
+
+
+sz_w_value_plot <- ggplot() +
+  geom_sf(data = grid$geom, aes(fill = as.factor(grid$sz_w_value)), lwd = 0.25) +
+  xlab("Longitude") + ylab("Latitude") +
+  labs(fill = "Value") +
+#   geom_sf(data = dat$geom, size = 0.5) +
+  my_theme +
+  ggtitle("SZ with value")
+
+sz_wo_value_plot <- ggplot() +
+  geom_sf(data = grid$geom, aes(fill = as.factor(grid$sz_wo_value)), lwd = 0.25) +
+  xlab("Longitude") + ylab("Latitude") +
+  labs(fill = "Value") +
+#   geom_sf(data = dat, size = 0.5) +
+  my_theme +
+  ggtitle("SZ without value")
+# names(grid)
+```
 # Save output
 ```{r save}
-write_csv(dat, "./data/02_data/2.1_acdat.csv")
+# plot
+ggsave(sz_w_value_plot, path = "./plots/ASC RUM", filename = paste("acSZwValue_", sim_name, ".png", sep = ''), width = 4, height = 4)
+
+ggsave(sz_wo_value_plot, path = "./plots/ASC RUM", filename = paste("acSZwoValue_", sim_name, ".png", sep = ''), width = 4, height = 4)
+
+# gpkg
+saveRDS(dat, paste0("./data/gpkg/2.1_acChoiceSet_",sim_name ,"4283.gpkg"))
+saveRDS(dat_rum_sf, paste0("./data/gpkg/2.1_acChoiceSet_rum", sim_name,"_4283.gpkg")) # sz with no values filters
+
+# csv
+write_csv(dat, paste0("./data/02_data/2.1_ac", sim_name,".csv"))
+write_csv(dat_rum_df, paste0("./data/02_data/2.1_ac", sim_name,"_rum.csv")) # sz with no values filters
 ```
