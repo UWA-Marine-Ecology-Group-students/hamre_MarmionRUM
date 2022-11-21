@@ -279,9 +279,9 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
     
     # applying probability function to every utility cell in Vj by boat ramp
 
-    # npz <- dat %>%  filter(NPZ == 1) # remove for 5 km grid
-    # 
-    # Vj[Vj$ID %in% npz$gridID_alt, cols] <- 0 # remove for 5 km grid
+    npz <- dat %>%  filter(NPZ == 1) # remove for 5 km grid
+
+    Vj[Vj$ID %in% npz$gridID_alt, cols] <- 0 # remove for 5 km grid
     p <- Vj[ , lapply(.SD, f1), by = br, .SDcols = c(cols, "ID")] 
     p <- p[order(br, ID)]
     dat %<>% arrange(BR, gridID_alt)

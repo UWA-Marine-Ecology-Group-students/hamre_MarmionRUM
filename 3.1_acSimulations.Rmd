@@ -20,18 +20,12 @@ library(rgdal)
 library(sf)
 
 # data
-dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_4283.gpkg")  # this is the generalised data with static site attributes
 BRtrips <- readRDS("./data/gpkg/2.1_BRtrips.gpkg") # This is produced by the "TripAllocation.R" script (Matt)
 
 # Plotting
 mp <- st_read("./data/gpkg/pmmp_4326.gpkg")
 # mp_bbox <- st_read("./data/gpkg/pscmpBbox_4326.gpkg")
 NPZ <- st_read("./data/gpkg/ntz_4283.gpkg")
-
-grid <- dat %>% as.data.frame() %>%
-  distinct(gridID_alt, .keep_all = TRUE) %>%
-  dplyr::select(gridID_alt, geom) %>%
-  st_as_sf()
 
 # defualt figure
   ax.title <- 14
@@ -55,12 +49,14 @@ b: coef
 v: covarience matrix
 ```{r}
 # sim <- "sim_og"
+# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsimog_4283.gpkg")  # this is the generalised data with static site attributes
 # b <- read_excel("./data/03_data/ac_sim_og.xlsx") %>% dplyr::select(Vars, Coef)
-# v <- read_excel("./data/03_data/ac_sim_og.xlsx", sheet = "v", col_names = rep("x", 7)) %>% 
-#   dplyr::select(-x...1 ) %>% 
+# v <- read_excel("./data/03_data/ac_sim_og.xlsx", sheet = "v", col_names = rep("x", 7)) %>%
+#   dplyr::select(-x...1 ) %>%
 #   distinct()
 #   
 # sim <- "sim1"
+# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim1_4283.gpkg")  # this is the generalised data with static site attributes
 # b <- read_excel("./data/03_data/ac_sim1.xlsx") %>% dplyr::select(Vars, Coef)
 # v <- read_excel("./data/03_data/ac_sim1.xlsx", sheet = "v", col_names = rep("x", 7)) %>%
 #   dplyr::select(-x...1 ) %>%
@@ -78,10 +74,39 @@ v: covarience matrix
 # v <- read_excel("./data/03_data/ac_sim3.xlsx", sheet = "v", col_names = rep("x", 6)) %>%
 #   dplyr::select(-x...1 ) %>%
 #   distinct()
+#   
+# sim <- "sim4"
+# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_4283.gpkg")  # this is the generalised data with static site attributes
+# b <- read_excel("./data/03_data/ac_sim4.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/ac_sim4.xlsx", sheet = "v", col_names = rep("x", 7)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
 
-sim <- "sim4"
-b <- read_excel("./data/03_data/ac_sim4.xlsx") %>% dplyr::select(Vars, Coef)
-v <- read_excel("./data/03_data/ac_sim4.xlsx", sheet = "v", col_names = rep("x", 7)) %>%
+
+# sim <- "simog_split"
+# b <- read_excel("./data/03_data/ac_simog_split.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/ac_simog_split.xlsx", sheet = "v", col_names = rep("x", 10)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+#   
+# sim <- "sim1_split"
+# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim1_split_4283.gpkg")  # this is the generalised data with static site attributes
+# b <- read_excel("./data/03_data/ac_sim1_split.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/ac_sim1_split.xlsx", sheet = "v", col_names = rep("x", 10)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+
+# sim <- "sim4_split"
+# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_split_4283.gpkg")  # this is the generalised data with static site attributes
+# b <- read_excel("./data/03_data/ac_sim4_split.xlsx") %>% dplyr::select(Vars, Coef)
+# v <- read_excel("./data/03_data/ac_sim4_split.xlsx", sheet = "v", col_names = rep("x", 10)) %>%
+#   dplyr::select(-x...1 ) %>%
+#   distinct()
+#   
+sim <- "aclogit_sim4_split"
+dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_split_4283.gpkg")  # this is the generalised data with static site attributes
+b <- read_excel("./data/03_data/aclogit_sim4_split.xlsx") %>% dplyr::select(Vars, Coef)
+v <- read_excel("./data/03_data/aclogit_sim4_split.xlsx", sheet = "v", col_names = rep("x", 38)) 
   dplyr::select(-x...1 ) %>%
   distinct()
 ```
@@ -89,7 +114,12 @@ v <- read_excel("./data/03_data/ac_sim4.xlsx", sheet = "v", col_names = rep("x",
 # Rearrange data
 Aim is to have matrix with same row names and column names
 ```{r rearrange, include = FALSE}
-    colnames(v) <- c("vars", v$x...2)
+    grid <- dat %>% as.data.frame() %>%
+        distinct(gridID_alt, .keep_all = TRUE) %>%
+        dplyr::select(gridID_alt, geom) %>%
+        st_as_sf()
+
+  colnames(v) <- c("vars", v$x...2)
     v %<>% dplyr::select(-vars)
     vars <- b$Vars #use
     
@@ -101,7 +131,7 @@ Aim is to have matrix with same row names and column names
 Generates coefficients drawn from within the ci of each variable.
 ```{r error, include = FALSE}
 # number of samples (all estimates)
-    n1 <- 100
+    n1 <- 1000
 
 # draws n1 numbers (nrow) from within a multivariate normal distribution for each variable (length)
 # mu = vector of means, Sigma = covarience matrix
@@ -120,7 +150,7 @@ We expect recreator  (i) to choose the site (j) with the highest expected utilit
 ```{r utility, include = FALSE}
 
 # define vars used in RUM
-  sz_vars <- dat %>% dplyr::select(num_range("sz", 1:10))
+  sz_vars <- dat %>% dplyr::select(num_range("sz", 1:100))
   vars <- c("travelCost", names(sz_vars))
     
 # turn defined vars into matrix from dat, make sure there is no geometry
@@ -175,7 +205,7 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
 # Calculates probability of visit summary statistics by row. This is the base probability of each site, for each trip and the error. 
 # For each site p has 100 estimates of the p of visiting that site me give me tyhe average, median, ci..
 
-    dat$p.mean_base <- rowMeans(p) # median
+    dat$p.mean_base <- rowQuantiles(p, probs = sqrt(0.5)) # lower ci
     dat$p.low_base <- rowQuantiles(p, probs = sqrt(0.025)) # lower ci
     dat$p.upp_base <- rowQuantiles(p, probs = 1 - sqrt(0.025)) # upper ci 
     
@@ -210,7 +240,7 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
     
 # Calculates probability of visit summary statistics by row. This is the simulated probability of each site, for each trip and the error. 
 
-    dat$p.mean_sim <- rowMeans(p)
+    dat$p.mean_sim <- rowQuantiles(p, probs = sqrt(0.5)) # lower ci
     dat$p.low_sim <- rowQuantiles(p, probs = sqrt(0.025)) #saving outputs back to p
     dat$p.upp_sim <- rowQuantiles(p, probs = 1 - sqrt(0.025)) #Note below about weird probs
     
@@ -228,14 +258,14 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
 
 # Summaries across draws
     W <- as.matrix(W)
-    logsum_sim$w.mean <- rowMeans(W)
+    logsum_sim$w.mean <- rowQuantiles(W, probs = sqrt(0.5)) # lower ci
     logsum_sim$w.low <- rowQuantiles(W, probs = sqrt(0.025)) 
     logsum_sim$w.upp <- rowQuantiles(W, probs = 1 - sqrt(0.025))
-    logsum_sim$upp.ci <- logsum_sim$w.upp - logsum_sim$w.mean
+    # logsum_sim$upp.ci <- logsum_sim$w.upp - logsum_sim$w.mean
     
     dat %<>%  mutate(BR = as.integer(BR))
   
-    dat %<>% left_join(logsum_sim[ , c("br", "w.mean", "w.upp", "w.low", "upp.ci")], by = c("BR" = "br"))
+    dat %<>% left_join(logsum_sim[ , c("br", "w.mean", "w.upp", "w.low")], by = c("BR" = "br"))
 
     # # Welfare impact of closure
     W_impact_trip <- logsum_sim %>%
@@ -319,75 +349,13 @@ png("./plots/ASC RUM/ac_s1.W_impact.png", height = 50*nrow(W_impact), width = 20
 grid.table(W_impact)
 dev.off()
 
-
-
 ```
 
 ```{r sc_spimpact, include = FALSE}
-# add planning area and crop to it
-# mp_bbox <- st_read("./data/gpkg/StudySite_4283.gpkg") %>% st_transform(crs(RUM_grid))
-# mpbr <- as.data.frame(st_intersects(BRtrips, mp_bbox, sparse = FALSE))
-# BRtrips$mpbr <- mpbr$V1
-# sp_mpbr <- BRtrips %>% filter(mpbr == TRUE)
-# mpbr <- sp_mpbr$RampID
-# 
-# # bbox <- RUM_grid %>% filter(BR %in% mpbr)
-# # 
 RUM_grid %<>%
      mutate(mean_diff = mean_sim_TRIPS_ramp_prop_Grvt__5 - mean_base_TRIPS_ramp_prop_Grvt__5,
             upp_diff = upp_sim_upp_TRIPS_Grvt__5 - upp_base_upp_TRIPS_Grvt__5,
-            low_diff = low_sim_low_TRIPS_Grvt__5 - low_base_low_TRIPS_Grvt__5) %>%
-  filter(mean_diff >= 0)
-# # 
-# # bbox <- RUM_grid %>% st_crop(mp_bbox)
-# # mp %<>% st_transform(crs(bbox))
-# # mp_crop <- mp %>% st_crop(bbox)
-# # mp_comm <- NPZ %>% st_crop(bbox)
-# 
-# presim <- ggplot(RUM_grid) +
-#       xlab("Longitude") + ylab("Latitude") +
-#       geom_sf(aes(fill = mean_base_TRIPS_ramp_prop_Grvt__5), lwd = 0.05) +
-#       scale_fill_distiller(palette = "YlGnBu", direction = 1) +
-#       labs(fill = "Trips\nannually") +
-#   my_theme +
-#   ggtitle(" Pre-simulation ") +
-#   geom_sf(data = mp, alpha = 0, lwd = 0.25) +
-#   geom_sf(data = NPZ, lwd = 0.25) +
-#   geom_sf(data = sp_mpbr, color = 'red', fill = 'red', size = 0.5)
-# 
-# ggsave(path = "./plots", filename = paste("sim1.presim.png", sep = ''), plot = presim, width = 8, height = 4)
-# 
-# postsim <- ggplot(RUM_grid) +
-#       xlab("Longitude") + ylab("Latitude") +
-#       geom_sf(aes(fill = mean_sim_TRIPS_ramp_prop_Grvt__5), lwd = 0.05) +
-#       scale_fill_distiller(palette = "YlGnBu", direction = 1) +
-#       labs(fill = "Trips\nannually") +
-#   geom_sf(data = sim, fill = 'black') +
-#   my_theme +
-#    ggtitle(" Post-simulation ") +
-#   geom_sf(data = mp, alpha = 0, lwd = 0.25) +
-#   geom_sf(data = NPZ, lwd = 0.25) +
-#   geom_sf(data = sp_mpbr, color = 'red', fill = 'red', size = 0.5)
-# 
-# ggsave(path = "./plots", filename = paste("sim1.postsim.png", sep = ''), width = 8, height = 4)
-# 
-# diff <- ggplot(RUM_grid) +
-#       xlab("Longitude") + ylab("Latitude") +
-#       geom_sf(aes(fill = mean_diff), lwd = 0.05) +
-#       scale_fill_distiller(palette = "YlGnBu", direction = -1) +
-#       labs(fill = "Change in\nannual trips") +
-#       my_theme +
-#     geom_sf(data = mp, alpha = 0, lwd = 0.25) +
-#     geom_sf(data = NPZ, lwd = 0.25) +
-#   geom_sf(data = sp_mpbr, color = 'red', fill = 'red', size = 0.5) +
-#   geom_sf(data = sim, lwd = 0.05, fill = "black")
-# 
-# ggsave(path = "./plots", filename = paste("sim1.diff.png", sep = ''), width = 8, height = 4)
-# 
-# presim
-# postsim
-# diff
-#
+            low_diff = low_sim_low_TRIPS_Grvt__5 - low_base_low_TRIPS_Grvt__5)
 ```
 
 
@@ -400,8 +368,7 @@ presim <- ggplot(RUM_grid) +
   my_theme +
   ggtitle(" Pre-simulation ")
 
-
-# ggsave(path = "./plots/ASC RUM", filename = paste("ac_sim_og.presim.png", sep = ''), width = 8, height = 4)
+RUM_grid %<>% filter(mean_diff >= 0)
 
 postsim <- ggplot(RUM_grid) +
       xlab("Longitude") + ylab("Latitude") +
@@ -414,8 +381,6 @@ postsim <- ggplot(RUM_grid) +
   # geom_sf(data = NPZ, lwd = 0.25) +
   # geom_sf(data = sp_mpbr, color = 'red', fill = 'red', size = 0.5)
 
-# ggsave(path = "./plots/ASC RUM", filename = paste("ac_sim_og.postsim.png", sep = ''), width = 8, height = 4)
-
 diff <- ggplot(RUM_grid) +
       xlab("Longitude") + ylab("Latitude") +
       geom_sf(aes(fill = mean_diff), lwd = 0.05) +
@@ -426,8 +391,6 @@ diff <- ggplot(RUM_grid) +
   #   geom_sf(data = NPZ, lwd = 0.25) +
   geom_sf(data = BRtrips, color = 'red', fill = 'red', size = 0.5) 
   # geom_sf(data = sim, lwd = 0.05, fill = "black")
-
-# ggsave(diff, path = "./plots/ASC RUM", filename = paste("ac_sim_og.diff.png", sep = ''), width = 8, height = 4)
 
 presim
 postsim
