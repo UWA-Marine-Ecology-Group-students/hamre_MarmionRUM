@@ -512,7 +512,9 @@ asc_test <- function(poly, #  sf polygon to split
   full_grid <- cbind(full_grid, full_geom) %>%
     st_as_sf() %>%
     dplyr::select(-geom) %>%
-    rename(geom = x)
+    rename(geom = x,
+           gridID_alt = id) %>% 
+    mutate(gridID_alt = row_number())
 
    print(
      ggplot() +
@@ -520,10 +522,10 @@ asc_test <- function(poly, #  sf polygon to split
                                      color = as.factor(sz_wo_value)), lwd = 0.5) +
        geom_sf(data = point, size = 0.5)
   )
-   
+
     print(
      ggplot() +
-       geom_sf(data = full_grid, aes(fill = as.factor(id)), lwd = 0.5)
+       geom_sf(data = full_grid, aes(fill = as.factor(gridID_alt)), lwd = 0.5)
    )
    return(full_grid)
 }
@@ -989,15 +991,6 @@ sz_wo_value_plot <- ggplot() +
 #   geom_sf(data = dat, size = 0.5) +
   my_theme +
   ggtitle("SZ without value")
-# names(grid)
-# 
-ggplot()+
-  geom_sf(data = dat_rum_sf$geom, aes(fill = as.factor(dat_rum_sf$gridID_alt)))
-
-a <- dat_rum_sf %>%  filter(gridID_vis %in% c(41))
-
-ggplot()+
-  geom_sf(data = a$geom, aes(fill = as.factor(a$gridID_vis)))
 ```
 
 
