@@ -86,8 +86,8 @@ sf_use_s2(FALSE)
 # sim <- st_read("./data/gpkg/sim4.gpkg")
 
 ## split
-# sim_name <- "simog_split"
-# sim <- st_read("./data/gpkg/simog_split.gpkg")
+sim_name <- "simog_split"
+sim <- st_read("./data/gpkg/simog_split.gpkg")
 # 
 # sim_name <- "sim1_split"
 # sim <- st_read("./data/gpkg/sim1_split.gpkg")
@@ -98,8 +98,8 @@ sf_use_s2(FALSE)
 # # sim_name <- "sim3_split"
 # sim <- st_read("./data/gpkg/sim3_split.gpkg")
 # 
-sim_name <- "sim4_split"
-sim <- st_read("./data/gpkg/sim4_split.gpkg")
+# sim_name <- "sim4_split"
+# sim <- st_read("./data/gpkg/sim4_split.gpkg")
 ```
 
 

@@ -102,13 +102,17 @@ v: covarience matrix
 # v <- read_excel("./data/03_data/ac_sim4_split.xlsx", sheet = "v", col_names = rep("x", 10)) %>%
 #   dplyr::select(-x...1 ) %>%
 #   distinct()
-#   
-sim <- "aclogit_sim4_split"
-dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_split_4283.gpkg")  # this is the generalised data with static site attributes
-b <- read_excel("./data/03_data/aclogit_sim4_split.xlsx")
-v <- read_excel("./data/03_data/aclogit_sim4_split.xlsx", sheet = "v", col_names = rep("x", 38)) 
-  # dplyr::select(-x...1 ) %>%
-  # distinct()
+
+# sim splits using asclogit
+sim <- "aclogit_simog_split"
+dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsimog_split_4283.gpkg")  # this is the generalised data with static site attributes
+b <- read_excel("./data/03_data/aclogit_simog_split.xlsx")
+v <- read_excel("./data/03_data/aclogit_simog_split.xlsx", sheet = "v", col_names = rep("x", 36)) %>%   distinct()
+
+# sim <- "aclogit_sim4_split"
+# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_split_4283.gpkg")  # this is the generalised data with static site attributes
+# b <- read_excel("./data/03_data/aclogit_sim4_split.xlsx")
+# v <- read_excel("./data/03_data/aclogit_sim4_split.xlsx", sheet = "v", col_names = rep("x", 38))%>%   distinct()
 ```
 
 # Rearrange data
@@ -120,7 +124,7 @@ Aim is to have matrix with same row names and column names
         st_as_sf()
 
     b %<>% rename(gridid_alt = ...1) %>% 
-      mutate(gridid_alt = ifelse(gridid_alt %in% "gridid_alt", 1, gridid_alt)) %>% 
+      mutate(gridid_alt = ifelse(gridid_alt %in% "gridid_alt", "BASE", gridid_alt)) %>% 
       dplyr::select(-Vars)
   
     v %<>% mutate(x...1 = ifelse(x...1 %in% "gridid_alt", 1, x...1)) %>% 
@@ -158,29 +162,14 @@ We expect recreator  (i) to choose the site (j) with the highest expected utilit
 ```{r utility, include = FALSE}
 
 # define vars used in RUM
-  # sz_vars <- dat %>% dplyr::select(num_range("sz", 1:100))
-  # vars <- c("travelCost", names(sz_vars))
-  vars <- c("travelCost")
-
-
-  # vars <- unique(dat$gridID_alt)
-    
+  bid <- unique(b$gridid_alt) 
+  bid <- bid[!bid == "BASE"]
+  id_vars <- dat %>% dplyr::select(num_range("gridID_", bid))
+  vars <- c("travelCost", names(id_vars)) 
+  
 # turn defined vars into matrix from dat, make sure there is no geometry
     rum_matrix <- as.matrix(dat[, vars])
-   
-    rum_matrix <- dat %>% dplyr::select(travelCost, gridID_alt)
-    # 
-     rum_matrix <- pivot_wider(rum_matrix, names_from = gridID_alt, values_from = travelCost)
-    # 
-    # rum_matrix %<>% pivot_longer(cols = 1:2, names_to = "gridID_alt", values_to = "travelCost")
-    # 
-    rum_matrix %<>% unnest(1:length(rum_matrix)) %>%
-    # distinct() %>%
-    as.matrix()
-      
-    # rum_matrix <- as.matrix(unique(dat$gridID_alt))
-    # nrow(rum_matrix) == nrow(dat) # should be true. 
-    
+
 # create an empty utility matrix
     Vj <- matrix(NA, nrow = nrow(rum_matrix), ncol = n1) 
     
@@ -239,7 +228,6 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
     # write.csv(logsum_base, "./ignore/03_data/3.1_logsum_base.csv")
 ```
 
-# Sim 1
 ```{r closures, include = FALSE}
 # Assign closures
   sz_vars <- dat %>% 
