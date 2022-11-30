@@ -103,16 +103,32 @@ v: covarience matrix
 #   dplyr::select(-x...1 ) %>%
 #   distinct()
 
-# sim splits using asclogit
-sim <- "aclogit_simog_split"
-dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsimog_split_4283.gpkg")  # this is the generalised data with static site attributes
-b <- read_excel("./data/03_data/aclogit_simog_split.xlsx")
-v <- read_excel("./data/03_data/aclogit_simog_split.xlsx", sheet = "v", col_names = rep("x", 36)) %>%   distinct()
+####### sim splits using asclogit ######
+# sim <- "aclogit_simog_split"
+# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsimog_split_4283.gpkg")  # this is the generalised data with static site attributes
+# b <- read_excel("./data/03_data/aclogit_simog_split.xlsx")
+# v <- read_excel("./data/03_data/aclogit_simog_split.xlsx", sheet = "v", col_names = rep("x", 36))
+# # %>%   distinct()
 
-# sim <- "aclogit_sim4_split"
-# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_split_4283.gpkg")  # this is the generalised data with static site attributes
-# b <- read_excel("./data/03_data/aclogit_sim4_split.xlsx")
-# v <- read_excel("./data/03_data/aclogit_sim4_split.xlsx", sheet = "v", col_names = rep("x", 38))%>%   distinct()
+# sim <- "aclogit_sim1_split"
+# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim1_split_4283.gpkg")  # this is the generalised data with static site attributes
+# b <- read_excel("./data/03_data/aclogit_sim1_split.xlsx")
+# v <- read_excel("./data/03_data/aclogit_sim1_split.xlsx", sheet = "v", col_names = rep("x", 37)) %>%   distinct()
+
+# sim <- "aclogit_sim2_split"
+# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim2_split_4283.gpkg")  # this is the generalised data with static site attributes
+# b <- read_excel("./data/03_data/aclogit_sim2_split.xlsx")
+# v <- read_excel("./data/03_data/aclogit_sim2_split.xlsx", sheet = "v", col_names = rep("x", 38))%>%   distinct()
+
+# sim <- "aclogit_sim3_split"
+# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim3_split_4283.gpkg")  # this is the generalised data with static site attributes
+# b <- read_excel("./data/03_data/aclogit_sim3_split.xlsx")
+# v <- read_excel("./data/03_data/aclogit_sim3_split.xlsx", sheet = "v", col_names = rep("x", 37)) %>%   distinct()
+
+sim <- "aclogit_sim4_split"
+dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_split_4283.gpkg")  # this is the generalised data with static site attributes
+b <- read_excel("./data/03_data/aclogit_sim4_split.xlsx")
+v <- read_excel("./data/03_data/aclogit_sim4_split.xlsx", sheet = "v", col_names = rep("x", 38))%>%   distinct()
 ```
 
 # Rearrange data
@@ -124,10 +140,10 @@ Aim is to have matrix with same row names and column names
         st_as_sf()
 
     b %<>% rename(gridid_alt = ...1) %>% 
-      mutate(gridid_alt = ifelse(gridid_alt %in% "gridid_alt", "BASE", gridid_alt)) %>% 
+      mutate(gridid_alt = ifelse(gridid_alt %in% "gridid_alt", "tc", gridid_alt)) %>% 
       dplyr::select(-Vars)
   
-    v %<>% mutate(x...1 = ifelse(x...1 %in% "gridid_alt", 1, x...1)) %>% 
+    v %<>% mutate(x...1 = ifelse(x...1 %in% "gridid_alt", "tc", x...1)) %>% 
       dplyr::select(-x...2) %>% 
       distinct()
   
@@ -137,6 +153,14 @@ Aim is to have matrix with same row names and column names
     
 # nrow(b) == length(v) # should be true
 # length(v) == nrow(v) # should be true
+
+a <- grid %>% filter(gridID_alt == 21)   
+ggplot()+
+  geom_sf(data = a, aes(fill = as.factor(gridID_alt)))
+
+ggplot()+
+  geom_sf(data = grid, aes(fill = as.factor(gridID_alt)))
+
 ```
 
 # Error 

@@ -1,5 +1,6 @@
-Script to make AC grid for Marmion
+# Wrangle data for ASC RUM
 
+## Set up
 ```{r setup}
 # knitr options
 knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE, fig.align = 'center', fig.width = 10, fig.height = 7) 
@@ -22,70 +23,26 @@ library(todor)
 library(smoothr)
 
 # data
-# sites <- st_read("./data/gpkg/ac_grid_4283.gpkg") 
 BR <- st_read("./data/gpkg/BR_4283.gpkg") # boat ramps
 BRtrips <- readRDS("./data/gpkg/2.1_BRtrips.gpkg")
 npz <- readRDS("./data/gpkg/2.1_acNPZ_4283.gpkg")
-# comm <- st_read("./data/gpkg/commwater.gpkg")
-# state <- st_read("./data/gpkg/statewater.gpkg")
 grid_base <- st_read("./data/gpkg/mar_acBase.gpkg")
-
-water <- readRDS("./data/gpkg/2.1_acStudySite_4283.gpkg")
 
 dat <- read_csv("data/01_data/1.2_dat.csv") %>% 
   filter(ActivityType == "Extractive") %>%
   filter(!is.na(UseLat), !is.na(UseLong)) %>% 
   st_as_sf(coords = c("UseLong", "UseLat"), crs = 4283)
 
-
 # functions
 source("./functions/spatialFunc.R") # spatial functions
 source("./functions/ascFunc.R")
+source("./functions/plottheme.R")
 
 sf_use_s2(FALSE)
-
-# testing layers
-# ggplot() +
-#   geom_sf(data = state) +
-#   geom_sf(data = comm, fill = 'red') +
-#   geom_sf(data = sim) +
-#   geom_sf(data = npz, fill = 'blue') +
-#   geom_sf(data = BR)
-#   
-# defualt figure
-  ax.title <- 14
-  ax.text <- 9
-  ax.legend <- 12
-  strip <- 9
-  a4_width <- 160
-  my_theme <- theme_classic() + theme( axis.text = element_text(size = ax.text),
-                                    text = element_text(size = ax.text),
-                                    axis.title = element_text(size = ax.title),
-                                    line = element_line(size = 0.3),
-                                    strip.background = element_rect(colour = "white", fill =
-                                                                      "gray80"),
-                                    strip.text = element_text(size = strip))
-
- col <- c("#d38685") 
 ```
 
+## Simulation
 ```{r}
-# sim_name <- "simog"
-# sim <- st_read("./data/gpkg/sim_og.gpkg")
-
-# sim_name <- "sim1"
-# sim <- st_read("./data/gpkg/sim1.gpkg")
-# 
-# # sim_name <- "sim2"
-# sim <- st_read("./data/gpkg/sim2.gpkg")
-# 
-# # sim_name <- "sim3"
-# sim <- st_read("./data/gpkg/sim3.gpkg")
-# 
-# # sim_name <- "sim4"
-# sim <- st_read("./data/gpkg/sim4.gpkg")
-
-## split
 sim_name <- "simog_split"
 sim <- st_read("./data/gpkg/simog_split.gpkg")
 # 
@@ -95,22 +52,17 @@ sim <- st_read("./data/gpkg/simog_split.gpkg")
 # sim_name <- "sim2_split"
 # sim <- st_read("./data/gpkg/sim2_split.gpkg")
 # 
-# # sim_name <- "sim3_split"
+# sim_name <- "sim3_split"
 # sim <- st_read("./data/gpkg/sim3_split.gpkg")
 # 
 # sim_name <- "sim4_split"
 # sim <- st_read("./data/gpkg/sim4_split.gpkg")
 ```
-
-
-# Make choice set
-```{r}
+## Choice set
+```{r message=FALSE}
 grid <- ASCgrid(poly = grid_base, sz_current = npz, sz_sim = sim, point = dat, from = 0.03, by = 0.02, min_area = 0, crs = 4283, vert = FALSE) # crs using degrees
 ```
-
-##########################
-
-# Attributes
+## Attributes
 ```{r}
 site_centroid <- st_centroid_within_poly(grid) # gets centroid of every grid cell
 grid$site_centroid <- site_centroid$geom # appending centroid
@@ -141,6 +93,7 @@ st_write(gridID_vis,
 #   geom_sf(data = sites$site_centroid, color = 'red')
 ```
 
+## Data wrangle
 ```{r}
 # Use spatial points
 dat <- st_crop(dat, grid) # removing outliers
@@ -175,7 +128,7 @@ dat <- dat %>%
 # this chunk should give you a data set with one trip per row, with a few trip/fisher attributes and the ID of visited grids 
 ```
 
-# Join data
+## Join data to choice set
 ```{r join}
 og_dat <- dat # copying original data test join
 
@@ -190,8 +143,9 @@ test = sum(c$times)
 test == nrow(dat) # this should be TRUE
 ```
 
-# Getting distance from BR to mean coordinate of all uses that launched from teh same boat ramp
-```{r}
+## Distance to BR
+Distance from the boat ra,mp to the centroid of data points in each grid that launched from that boat ramp - if not takes centroid of grid cell. 
+```{r message=FALSE}
 dat <- dat %>% 
   st_as_sf() # turn to sf object
 
@@ -227,7 +181,7 @@ dat <- dat %>%
   mutate(km_BR = ifelse(is.na(use.centroid_km.BR), site.centroid_km.BR, use.centroid_km.BR)) # distance tc to be measured from
 ```
 
-# Choice and travel cost ($0.54/km)
+## Choice and travel cost ($0.54/km)
 ```{r choice and travel cost}
 dat <- dat %>% 
   # mutate(centroidLong = st_coordinates(polyCentroid)[,1]) %>% # need this is using dynamic variables
@@ -237,13 +191,15 @@ dat <- dat %>%
   dplyr::select(-c(geometry, site.centroid_km.BR, use.centroid_km.BR))
 ```
 
-# filtering out current sz and sim sz with no value
+## Filtering SZ
+  - Current sz will have no data and therefore no value so are removed
+  - Simulated sz that have no data have no value so are  removed
 ```{r}
 dat_rum <- dat %>% 
   filter(sz_current != 1, sz_wo_value != 1)
 
 sz_to_remove <- dat_rum %>% 
-  dplyr::select(num_range("sz", 1:10)) %>% 
+  dplyr::select(num_range("sz", 1:100)) %>% 
   summarise_all(sum) 
 
 sz_to_remove <- names(sz_to_remove[, which(sz_to_remove %in% 0)])
@@ -270,8 +226,7 @@ sz_wo_value_plot <- ggplot() +
 sz_wo_value_plot
 ```
 
-
-# Save output
+## Save outputs
 ```{r save}
 # plot
 ggsave(sz_w_value_plot, path = "./plots/ASC RUM", filename = paste("acSZwValue_", sim_name, ".png", sep = ''), width = 4, height = 4)
