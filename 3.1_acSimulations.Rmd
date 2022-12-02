@@ -21,114 +21,43 @@ library(sf)
 
 # data
 BRtrips <- readRDS("./data/gpkg/2.1_BRtrips.gpkg") # This is produced by the "TripAllocation.R" script (Matt)
-
-# Plotting
 mp <- st_read("./data/gpkg/pmmp_4326.gpkg")
 # mp_bbox <- st_read("./data/gpkg/pscmpBbox_4326.gpkg")
 NPZ <- st_read("./data/gpkg/ntz_4283.gpkg")
 
-# defualt figure
-  ax.title <- 14
-  ax.text <- 9
-  ax.legend <- 12
-  strip <- 9
-  a4_width <- 160
-  my_theme <- theme_classic() + theme( axis.text = element_text(size = ax.text),
-                                    text = element_text(size = ax.text),
-                                    axis.title = element_text(size = ax.title),
-                                    line = element_line(size = 0.3),
-                                    strip.background = element_rect(colour = "white", fill =
-                                                                      "gray80"),
-                                    strip.text = element_text(size = strip))
-
- col <- c("#d38685") 
+# source
+source("./functions/theme.R")
 ```
 
 # RUM coef
 b: coef
 v: covarience matrix
 ```{r}
-# sim <- "sim_og"
-# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsimog_4283.gpkg")  # this is the generalised data with static site attributes
-# b <- read_excel("./data/03_data/ac_sim_og.xlsx") %>% dplyr::select(Vars, Coef)
-# v <- read_excel("./data/03_data/ac_sim_og.xlsx", sheet = "v", col_names = rep("x", 7)) %>%
-#   dplyr::select(-x...1 ) %>%
-#   distinct()
-#   
-# sim <- "sim1"
-# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim1_4283.gpkg")  # this is the generalised data with static site attributes
-# b <- read_excel("./data/03_data/ac_sim1.xlsx") %>% dplyr::select(Vars, Coef)
-# v <- read_excel("./data/03_data/ac_sim1.xlsx", sheet = "v", col_names = rep("x", 7)) %>%
-#   dplyr::select(-x...1 ) %>%
-#   distinct()
-#   
-# sim <- "sim2"
-# b <- read_excel("./data/03_data/ac_sim2.xlsx") %>% dplyr::select(Vars, Coef)
-# v <- read_excel("./data/03_data/ac_sim2.xlsx", sheet = "v", col_names = rep("x", 7)) %>% 
-#   dplyr::select(-x...1 ) %>% 
-#   distinct()
-#   
-
-# sim <- "sim3"
-# b <- read_excel("./data/03_data/ac_sim3.xlsx") %>% dplyr::select(Vars, Coef)
-# v <- read_excel("./data/03_data/ac_sim3.xlsx", sheet = "v", col_names = rep("x", 6)) %>%
-#   dplyr::select(-x...1 ) %>%
-#   distinct()
-#   
-# sim <- "sim4"
-# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_4283.gpkg")  # this is the generalised data with static site attributes
-# b <- read_excel("./data/03_data/ac_sim4.xlsx") %>% dplyr::select(Vars, Coef)
-# v <- read_excel("./data/03_data/ac_sim4.xlsx", sheet = "v", col_names = rep("x", 7)) %>%
-#   dplyr::select(-x...1 ) %>%
-#   distinct()
-
-
-# sim <- "simog_split"
-# b <- read_excel("./data/03_data/ac_simog_split.xlsx") %>% dplyr::select(Vars, Coef)
-# v <- read_excel("./data/03_data/ac_simog_split.xlsx", sheet = "v", col_names = rep("x", 10)) %>%
-#   dplyr::select(-x...1 ) %>%
-#   distinct()
-#   
-# sim <- "sim1_split"
-# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim1_split_4283.gpkg")  # this is the generalised data with static site attributes
-# b <- read_excel("./data/03_data/ac_sim1_split.xlsx") %>% dplyr::select(Vars, Coef)
-# v <- read_excel("./data/03_data/ac_sim1_split.xlsx", sheet = "v", col_names = rep("x", 10)) %>%
-#   dplyr::select(-x...1 ) %>%
-#   distinct()
-
-# sim <- "sim4_split"
-# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_split_4283.gpkg")  # this is the generalised data with static site attributes
-# b <- read_excel("./data/03_data/ac_sim4_split.xlsx") %>% dplyr::select(Vars, Coef)
-# v <- read_excel("./data/03_data/ac_sim4_split.xlsx", sheet = "v", col_names = rep("x", 10)) %>%
-#   dplyr::select(-x...1 ) %>%
-#   distinct()
-
 ####### sim splits using asclogit ######
 # sim <- "aclogit_simog_split"
 # dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsimog_split_4283.gpkg")  # this is the generalised data with static site attributes
 # b <- read_excel("./data/03_data/aclogit_simog_split.xlsx")
-# v <- read_excel("./data/03_data/aclogit_simog_split.xlsx", sheet = "v", col_names = rep("x", 36))
-# # %>%   distinct()
+# v <- read_excel("./data/03_data/aclogit_simog_split.xlsx", sheet = "v", col_names = rep("x", 36)) %>%   distinct()
 
-# sim <- "aclogit_sim1_split"
-# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim1_split_4283.gpkg")  # this is the generalised data with static site attributes
-# b <- read_excel("./data/03_data/aclogit_sim1_split.xlsx")
-# v <- read_excel("./data/03_data/aclogit_sim1_split.xlsx", sheet = "v", col_names = rep("x", 37)) %>%   distinct()
+sim <- "aclogit_sim1_split"
+dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim1_split_4283.gpkg")  # this is the generalised data with static site attributes
+b <- read_excel("./data/03_data/aclogit_sim1_split.xlsx")
+v <- read_excel("./data/03_data/aclogit_sim1_split.xlsx", sheet = "v", col_names = rep("x", 37)) %>%   distinct()
 
 # sim <- "aclogit_sim2_split"
 # dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim2_split_4283.gpkg")  # this is the generalised data with static site attributes
 # b <- read_excel("./data/03_data/aclogit_sim2_split.xlsx")
-# v <- read_excel("./data/03_data/aclogit_sim2_split.xlsx", sheet = "v", col_names = rep("x", 38))%>%   distinct()
+# v <- read_excel("./data/03_data/aclogit_sim2_split.xlsx", sheet = "v", col_names = rep("x", 38)) %>% distinct()
 
 # sim <- "aclogit_sim3_split"
 # dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim3_split_4283.gpkg")  # this is the generalised data with static site attributes
 # b <- read_excel("./data/03_data/aclogit_sim3_split.xlsx")
 # v <- read_excel("./data/03_data/aclogit_sim3_split.xlsx", sheet = "v", col_names = rep("x", 37)) %>%   distinct()
 
-sim <- "aclogit_sim4_split"
-dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_split_4283.gpkg")  # this is the generalised data with static site attributes
-b <- read_excel("./data/03_data/aclogit_sim4_split.xlsx")
-v <- read_excel("./data/03_data/aclogit_sim4_split.xlsx", sheet = "v", col_names = rep("x", 38))%>%   distinct()
+# sim <- "aclogit_sim4_split"
+# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_split_4283.gpkg")  # this is the generalised data with static site attributes
+# b <- read_excel("./data/03_data/aclogit_sim4_split.xlsx")
+# v <- read_excel("./data/03_data/aclogit_sim4_split.xlsx", sheet = "v", col_names = rep("x", 38))%>%   distinct()
 ```
 
 # Rearrange data
@@ -150,30 +79,22 @@ Aim is to have matrix with same row names and column names
     colnames(v) <- c("vars", v$x...1)
     v %<>% dplyr::select(-vars)
     vars <- b$gridid_alt #use
-    
-# nrow(b) == length(v) # should be true
-# length(v) == nrow(v) # should be true
 
-a <- grid %>% filter(gridID_alt == 21)   
-ggplot()+
-  geom_sf(data = a, aes(fill = as.factor(gridID_alt)))
-
-ggplot()+
-  geom_sf(data = grid, aes(fill = as.factor(gridID_alt)))
-
+# checkpoint
+nrow(b) == length(v) # should be true
+length(v) == nrow(v) # should be true
+summary(b$Coef) # check min and max, the more extreme the values the more inflated or deflated the results will be. Most likely a problem with script 2.1 or model.
 ```
 
 # Error 
-Generates coefficients drawn from within the ci of each variable.
+Generates coefficients drawn from within the ci of each variable. Draws n1 numbers (nrow) from within a multivariate normal distribution for each variable (length); mu = vector of means, Sigma = covarience matrix
 ```{r error, include = FALSE}
-# number of samples (all estimates)
-    n1 <- 100
-
-# draws n1 numbers (nrow) from within a multivariate normal distribution for each variable (length)
-# mu = vector of means, Sigma = covarience matrix
+    n1 <- 1000 # number of samples (all estimates)
     mvn_b <- mvrnorm(n1, mu = b$Coef, Sigma = as.matrix(v)) 
-# dim(mvn_b)[1] == n1 # should be true
-# dim(mvn_b)[2] == nrow(b) # should be true
+
+# checkpoint
+dim(mvn_b)[1] == n1 # should be true
+dim(mvn_b)[2] == nrow(b) # should be true
 ```
 
 # Utility
@@ -274,16 +195,11 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
     p <- p[ , ID := NULL]
     p <- as.matrix(p)
     
-    
 # Calculates probability of visit summary statistics by row. This is the simulated probability of each site, for each trip and the error. 
 
     dat$p.mean_sim <- rowQuantiles(p, probs = sqrt(0.5)) # lower ci
     dat$p.low_sim <- rowQuantiles(p, probs = sqrt(0.025)) #saving outputs back to p
     dat$p.upp_sim <- rowQuantiles(p, probs = 1 - sqrt(0.025)) #Note below about weird probs
-    
-    # ggplot() +
-    #   geom_sf(data = dat) +
-    #   geom_sf(data = sim, fill = 'red')
 ```
 
 # Extract Welfare
@@ -403,6 +319,7 @@ presim <- ggplot(RUM_grid) +
       scale_fill_distiller(palette = "YlGnBu", direction = 1) +
       labs(fill = "Trips\nannually") +
   my_theme +
+   geom_sf(data = BRtrips, color = 'red', fill = 'red', size = 0.75) +
   ggtitle(" Pre-simulation ")
 
 RUM_grid %<>% filter(mean_diff >= 0)

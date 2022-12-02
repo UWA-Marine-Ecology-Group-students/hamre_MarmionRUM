@@ -72,19 +72,26 @@ ASCgrid <- function(poly, #  sf polygon to split
     rename(geom = x)
   
   # chceking to see if there is data in the sims
-  temp <- as.data.frame(st_intersects(ntz, dat, sparse = FALSE)) %>%
-    rowwise %>%
-    mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
-    ungroup()
-  
-  ntz$data_present <- temp$inpoly_w_ntz
-  ntz %<>% mutate(id = row_number())
+  # temp <- as.data.frame(st_intersects(ntz, dat, sparse = FALSE)) %>%
+  #   rowwise %>%
+  #   mutate(inpoly_w_ntz = if_any(starts_with('V'), ~. == TRUE)) %>%
+  #   ungroup()
+  # 
+  # ntz$data_present <- temp$inpoly_w_ntz
+  # ntz %<>% mutate(id = row_number())
+  # 
+  # ntz %<>%
+  #   mutate(data_present = temp$inpoly_w_ntz,
+  #          id = row_number(),
+  #          sz_w_value = ifelse(sz == 1 & data_present == TRUE, 1, 0),
+  #          sz_wo_value = ifelse(sz == 1 & data_present == FALSE, 1, 0))
+  #          
+ ntz$use_count <- lengths(st_intersects(ntz, point))
   
   ntz %<>%
-    mutate(data_present = temp$inpoly_w_ntz,
-           id = row_number(),
-           sz_w_value = ifelse(sz == 1 & data_present == TRUE, 1, 0),
-           sz_wo_value = ifelse(sz == 1 & data_present == FALSE, 1, 0))
+    mutate(sz_w_value = ifelse(use_count > 0, 1, 0),
+           sz_wo_value = ifelse(use_count == 0, 1, 0),
+           id = row_number())
   
   # cutting ntz out of polygon to make grid in
   poly_w_ntz <- st_difference(st_make_valid(poly), st_combine(ntz)) # crops ntz out of grid
@@ -173,6 +180,9 @@ ASCgrid <- function(poly, #  sf polygon to split
     rename(geom = x,
            gridID_alt = id) %>% 
     mutate(gridID_alt = row_number())
+  
+  full_grid$area <- as.numeric(round(set_units(st_area(full_grid), km^2), 2))
+  full_grid$use_count <- lengths(st_intersects(full_grid, point))
   
   for (i in unique(full_grid$gridID_alt)) {
        gridID = ifelse(full_grid$gridID_alt == i, 1, 0)

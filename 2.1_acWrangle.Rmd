@@ -27,45 +27,96 @@ BR <- st_read("./data/gpkg/BR_4283.gpkg") # boat ramps
 BRtrips <- readRDS("./data/gpkg/2.1_BRtrips.gpkg")
 npz <- readRDS("./data/gpkg/2.1_acNPZ_4283.gpkg")
 grid_base <- st_read("./data/gpkg/mar_acBase.gpkg")
-
-dat <- read_csv("data/01_data/1.2_dat.csv") %>% 
-  filter(ActivityType == "Extractive") %>%
-  filter(!is.na(UseLat), !is.na(UseLong)) %>% 
-  st_as_sf(coords = c("UseLong", "UseLat"), crs = 4283)
+dat <- read_csv("data/01_data/1.2_dat.csv") 
 
 # functions
 source("./functions/spatialFunc.R") # spatial functions
 source("./functions/ascFunc.R")
-source("./functions/plottheme.R")
+source("./functions/theme.R")
 
 sf_use_s2(FALSE)
 ```
 
 ## Simulation
 ```{r}
-sim_name <- "simog_split"
-sim <- st_read("./data/gpkg/simog_split.gpkg")
-# 
+# sim_name <- "simog_split"
+# sim <- st_read("./data/gpkg/simog_split.gpkg")
+
 # sim_name <- "sim1_split"
 # sim <- st_read("./data/gpkg/sim1_split.gpkg")
 
 # sim_name <- "sim2_split"
 # sim <- st_read("./data/gpkg/sim2_split.gpkg")
-# 
-# sim_name <- "sim3_split"
-# sim <- st_read("./data/gpkg/sim3_split.gpkg")
+
+sim_name <- "sim3_split"
+sim <- st_read("./data/gpkg/sim3_split.gpkg")
 # 
 # sim_name <- "sim4_split"
 # sim <- st_read("./data/gpkg/sim4_split.gpkg")
 ```
+## Data prep
+All data filters have to be done before making the choice set.
+```{r}
+dat %<>% 
+  filter(ActivityType == "Extractive") %>% # filtering activity
+  filter(!is.na(UseLat), !is.na(UseLong)) %>% # filtering empty coords
+  st_as_sf(coords = c("UseLong", "UseLat"), crs = 4283)  ## make sf object
+  
+
+dat %<>% st_crop(dat, grid_base) # removing outliers
+
+# need one trip per row (longest site visited on trip)
+dat %<>% 
+  group_by(PersonID, TripID) %>% 
+  slice(which.max(decDuration)) %>% 
+  ungroup()
+
+which(duplicated(dat$TripID) == TRUE) # Should be none
+```
+
 ## Choice set
 ```{r message=FALSE}
 grid <- ASCgrid(poly = grid_base, sz_current = npz, sz_sim = sim, point = dat, from = 0.03, by = 0.02, min_area = 0, crs = 4283, vert = FALSE) # crs using degrees
 ```
+# simulation stats
+```{r}
+grid %>% group_by(sz, sz_current, sz_w_value) %>%  summarise("Area (km2)" = sum(area)) # area of sz with and without value
+grid %>% group_by(sz) %>% summarise(use_count = sum(use_count)) # use count in and out sz
+
+mp <- st_read("./data/gpkg/pmmp_4326.gpkg") %>% st_transfrom(crs(dat))
+coast <- st_read("./data/gpkg/Coast_4283.gpkg") %>% st_transform(crs(mp))
+
+sz_mp <- grid %>% filter(sz == 1) %>% st_union()
+
+sz_area <- sum(as.numeric(round(set_units(st_area(sz_mp), km^2), 2))) # total area of sz
+mp_area <- as.numeric(round(set_units(st_area(mp), km^2), 2)) # total area pf mp
+per_sz <- round((sz_area/mp_area)*100, 2) # percentage of mp to be made sz
+
+# mp$use_count <- lengths(st_intersects(mp, dat))
+
+# calculate mp length of coast
+# calculate length of coast that has sz 
+# percentage of sz that have access to the shore
+
+# mp_coast <- st_touches(mp, coast)
+# peri <- st_perimeter(mp_coast)
+# 
+# ggplot()+
+#   # geom_sf(data = mp) +
+#   # geom_sf(data = sz_mp) +
+#   geom_sf(data = mp_coast, colour = 'red')
+```
+
+
 ## Attributes
 ```{r}
 site_centroid <- st_centroid_within_poly(grid) # gets centroid of every grid cell
 grid$site_centroid <- site_centroid$geom # appending centroid
+
+# checkpoint
+ggplot() +
+  geom_sf(data = grid$geom) +
+  geom_sf(data = grid$site_centroid, color = 'red')
 
 # getting distance from each boat rampe to the centroid of the sites
 BR <- st_transform(BR, crs(grid))
@@ -77,40 +128,27 @@ dist <- dist %>% gather("BR", "site.centroid_km.BR", 1:length(dist) - 1)
 grid <- grid %>% left_join(dist, by = "gridID_alt") # join 
 
 grid <- grid |> st_sf() |> # wont work without st_sf()
-  dplyr::select(-site_centroid) 
-
-gridID_vis <- grid %>% 
-  dplyr::select(gridID_alt, geom) %>% 
-  distinct() 
-
-st_write(gridID_vis, 
-         paste0("./data/gpkg/2.1_acChoiceSetQ", sim_name, "_4283.gpkg"), 
-         append = FALSE) # need to write with st_write to open in QGISRUMs
-
-# check 
-# ggplot() +
-#   geom_sf(data = sites$geom, aes(fill = sites$SZ)) +
-#   geom_sf(data = sites$site_centroid, color = 'red')
+  dplyr::select(-site_centroid)
 ```
 
 ## Data wrangle
 ```{r}
-# Use spatial points
+# isolating grid id to append to dat
+gridID_vis <- grid %>% 
+  dplyr::select(gridID_alt, geom) %>% 
+  distinct() 
+
+# st_write(gridID_vis, 
+#          paste0("./data/gpkg/2.1_acChoiceSetQ", sim_name, "_4283.gpkg"), 
+#          append = FALSE) # need to write with st_write to open in QGISRUMs
+
 dat <- st_crop(dat, grid) # removing outliers
 
-# need one trip per row (longest site visited on trip)
-dat <- dat %>% 
-  group_by(PersonID, TripID) %>% 
-  slice(which.max(decDuration)) %>% 
-  ungroup()
-# which(duplicated(dat$TripID) == TRUE) # Should be none
-
 # allocating sites to grids
-dat <- dat %>%
-  st_join(gridID_vis, left = T, join = st_intersects)
+dat  %<>% st_join(gridID_vis, left = T, join = st_intersects)
 
 # selecting attributes, and tidying
-dat <- dat %>% 
+dat %<>% 
   rename(gridID_vis = gridID_alt) %>% 
   dplyr::select(TripID, PersonID, gridID_vis, Site) %>% 
   distinct() %>% 
@@ -123,9 +161,8 @@ dat <- dat %>%
   dplyr::select(-Site) %>% 
   as.data.frame()
 
-# which(is.na(dat$gridID_vis)==TRUE)
-
-# this chunk should give you a data set with one trip per row, with a few trip/fisher attributes and the ID of visited grids 
+# checkpoint
+which(is.na(dat$gridID_alt) == TRUE) # should be none
 ```
 
 ## Join data to choice set
@@ -134,7 +171,7 @@ og_dat <- dat # copying original data test join
 
 dat <- inner_join(dat, grid, by = "BR") # FALSE
 
-# testing join
+# checkpoint
 a <- as.data.frame(table(og_dat$BR)) %>% rename(launches = Freq)
 b <- as.data.frame(table(grid$BR)) %>%  rename(n_sites = Freq)
 c <- left_join(a, b)
@@ -195,18 +232,33 @@ dat <- dat %>%
   - Current sz will have no data and therefore no value so are removed
   - Simulated sz that have no data have no value so are  removed
 ```{r}
-dat_rum <- dat %>% 
-  filter(sz_current != 1, sz_wo_value != 1)
+# remove all current sz (sz_curret is made from gridID_alt)
+dat %<>% filter(sz_current != 1)
 
-sz_to_remove <- dat_rum %>% 
+# remove observations that have visited the current sz (removed above)
+sz_current_w_use <- setdiff(unique(dat$gridID_vis), unique(dat$gridID_alt))
+# length(sz_current_w_use) # number of current sz that have use in it
+# length(which(dat$gridID_vis %in% sz_current_w_use))/length(unique(dat$gridID_alt)) # n trips to sz current
+
+dat %<>% filter(!(gridID_vis %in% sz_current_w_use))
+
+dat %<>% filter(sz_wo_value != 1)
+
+# test: should be no difference between gridID_alt and gridID_vis because all grids ahould have at least 1 data point.
+ setdiff(unique(dat$gridID_vis), unique(dat$gridID_alt))
+ setdiff(unique(dat$gridID_alt), unique(dat$gridID_vis))
+
+ #removing sz columns
+sz_to_remove <- dat %>% 
   dplyr::select(num_range("sz", 1:100)) %>% 
   summarise_all(sum) 
 
 sz_to_remove <- names(sz_to_remove[, which(sz_to_remove %in% 0)])
  
-dat_rum_sf <- dat_rum %>% dplyr::select(-c(sz_to_remove))
-dat_rum_df <- dat_rum %>% dplyr::select(-c(sz_to_remove, sz_current, sz_wo_value, geom))
+dat_rum_sf <- dat %>% dplyr::select(-c(sz_to_remove))
+dat_rum_df <- dat %>% dplyr::select(-c(sz_to_remove, sz_current, sz_wo_value, geom))
 
+# plots
 sz_w_value_plot <- ggplot() +
   geom_sf(data = grid$geom, aes(fill = as.factor(grid$sz_w_value)), lwd = 0.25) +
   xlab("Longitude") + ylab("Latitude") +
@@ -223,6 +275,7 @@ sz_wo_value_plot <- ggplot() +
   my_theme +
   ggtitle("SZ without value")
 
+sz_w_value_plot
 sz_wo_value_plot
 ```
 
@@ -233,11 +286,11 @@ ggsave(sz_w_value_plot, path = "./plots/ASC RUM", filename = paste("acSZwValue_"
 
 ggsave(sz_wo_value_plot, path = "./plots/ASC RUM", filename = paste("acSZwoValue_", sim_name, ".png", sep = ''), width = 4, height = 4)
 
-# gpkg
+# data with grids cells with no value
 saveRDS(dat, paste0("./data/gpkg/2.1_acChoiceSet_",sim_name ,"4283.gpkg"))
-saveRDS(dat_rum_sf, paste0("./data/gpkg/2.1_acChoiceSet_rum", sim_name,"_4283.gpkg")) # sz with no values filtered - for 3.1
-
-# csv
 write_csv(dat, paste0("./data/02_data/2.1_ac", sim_name,".csv"))
-write_csv(dat_rum_df, paste0("./data/02_data/2.1_ac", sim_name,"_rum.csv")) # sz with no values filters - for stata
+
+# data without grids cells with no value, for model
+saveRDS(dat_rum_sf, paste0("./data/gpkg/2.1_acChoiceSet_rum", sim_name,"_4283.gpkg")) # script 3.1
+write_csv(dat_rum_df, paste0("./data/02_data/2.1_ac", sim_name,"_rum.csv")) # stata
 ```
