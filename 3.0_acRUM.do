@@ -209,3 +209,45 @@
 	putexcel A2 = matrix(v), rownames
 	putexcel set aclogit_sim4_split.xlsx, modify sheet(v)
 	putexcel A1 = matrix(v), rownames
+
+	
+	
+	**# TEST
+* define directory  
+
+	cd "/Users/23088313/Documents/git_repos/hamre_MarmionRUM"
+	
+* read data 
+
+	clear
+	import delimited "data/02_data/2.1_actest_rum.csv"
+
+* making binary columns factors not numeric
+
+	gen fchoice = choice == 1
+
+* base model
+	
+	
+	asclogit fchoice c.travelcost, case(tripid) alt(gridid_alt)
+	estimates store asc_test
+	
+* store variance-covariance matrix 
+
+	matrix b = e(b)'
+	matrix v = e(V)
+
+* store outputs 
+
+	* define directory  to store
+
+	cd "/Users/23088313/Documents/git_repos/hamre_MarmionRUM/data/03_data"
+
+	putexcel set aclogit_test_split.xlsx, replace
+	putexcel A2 = matrix(b), rownames
+	putexcel B1 = "Vars"
+	putexcel C1 = "Coef"
+	putexcel set aclogit_test_split.xlsx, modify sheet(v)
+	putexcel A2 = matrix(v), rownames
+	putexcel set aclogit_test_split.xlsx, modify sheet(v)
+	putexcel A1 = matrix(v), rownames

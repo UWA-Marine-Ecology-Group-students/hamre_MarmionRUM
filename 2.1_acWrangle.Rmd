@@ -48,11 +48,17 @@ sf_use_s2(FALSE)
 # sim_name <- "sim2_split"
 # sim <- st_read("./data/gpkg/sim2_split.gpkg")
 
-sim_name <- "sim3_split"
-sim <- st_read("./data/gpkg/sim3_split.gpkg")
+# sim_name <- "sim3_split"
+# sim <- st_read("./data/gpkg/sim3_split.gpkg")
+
+sim_name <- "sim4_split"
+sim <- st_read("./data/gpkg/sim4_split.gpkg")
+
+# sim %<>% mutate(id = row_number())
 # 
-# sim_name <- "sim4_split"
-# sim <- st_read("./data/gpkg/sim4_split.gpkg")
+# sim %<>% filter(id == 9)
+# ggplot()+
+#   geom_sf(data = sim, aes(fill = as.factor(id)))
 ```
 ## Data prep
 All data filters have to be done before making the choice set.
@@ -83,7 +89,7 @@ grid <- ASCgrid(poly = grid_base, sz_current = npz, sz_sim = sim, point = dat, f
 grid %>% group_by(sz, sz_current, sz_w_value) %>%  summarise("Area (km2)" = sum(area)) # area of sz with and without value
 grid %>% group_by(sz) %>% summarise(use_count = sum(use_count)) # use count in and out sz
 
-mp <- st_read("./data/gpkg/pmmp_4326.gpkg") %>% st_transfrom(crs(dat))
+mp <- st_read("./data/gpkg/pmmp_4326.gpkg") %>% st_transform(crs(dat))
 coast <- st_read("./data/gpkg/Coast_4283.gpkg") %>% st_transform(crs(mp))
 
 sz_mp <- grid %>% filter(sz == 1) %>% st_union()
@@ -224,7 +230,7 @@ dat <- dat %>%
   # mutate(centroidLong = st_coordinates(polyCentroid)[,1]) %>% # need this is using dynamic variables
   # mutate(centroidLat = st_coordinates(polyCentroid)[,2]) %>%
   mutate(choice = ifelse(gridID_vis == gridID_alt, 1, 0)) %>% 
-  mutate(travelCost = as.numeric(0.54*km_BR)) %>% 
+  mutate(travelCost = as.numeric(0.58*km_BR)) %>%  # 0.58 = ave fuel price/consumption
   dplyr::select(-c(geometry, site.centroid_km.BR, use.centroid_km.BR))
 ```
 
@@ -281,6 +287,8 @@ sz_wo_value_plot
 
 ## Save outputs
 ```{r save}
+
+sim_name <- "test"
 # plot
 ggsave(sz_w_value_plot, path = "./plots/ASC RUM", filename = paste("acSZwValue_", sim_name, ".png", sep = ''), width = 4, height = 4)
 

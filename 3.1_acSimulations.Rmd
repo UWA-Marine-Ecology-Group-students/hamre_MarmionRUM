@@ -39,10 +39,10 @@ v: covarience matrix
 # b <- read_excel("./data/03_data/aclogit_simog_split.xlsx")
 # v <- read_excel("./data/03_data/aclogit_simog_split.xlsx", sheet = "v", col_names = rep("x", 36)) %>%   distinct()
 
-sim <- "aclogit_sim1_split"
-dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim1_split_4283.gpkg")  # this is the generalised data with static site attributes
-b <- read_excel("./data/03_data/aclogit_sim1_split.xlsx")
-v <- read_excel("./data/03_data/aclogit_sim1_split.xlsx", sheet = "v", col_names = rep("x", 37)) %>%   distinct()
+# sim <- "aclogit_sim1_split"
+# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim1_split_4283.gpkg")  # this is the generalised data with static site attributes
+# b <- read_excel("./data/03_data/aclogit_sim1_split.xlsx")
+# v <- read_excel("./data/03_data/aclogit_sim1_split.xlsx", sheet = "v", col_names = rep("x", 37)) %>%   distinct()
 
 # sim <- "aclogit_sim2_split"
 # dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim2_split_4283.gpkg")  # this is the generalised data with static site attributes
@@ -54,10 +54,16 @@ v <- read_excel("./data/03_data/aclogit_sim1_split.xlsx", sheet = "v", col_names
 # b <- read_excel("./data/03_data/aclogit_sim3_split.xlsx")
 # v <- read_excel("./data/03_data/aclogit_sim3_split.xlsx", sheet = "v", col_names = rep("x", 37)) %>%   distinct()
 
-# sim <- "aclogit_sim4_split"
-# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_split_4283.gpkg")  # this is the generalised data with static site attributes
-# b <- read_excel("./data/03_data/aclogit_sim4_split.xlsx")
-# v <- read_excel("./data/03_data/aclogit_sim4_split.xlsx", sheet = "v", col_names = rep("x", 38))%>%   distinct()
+sim <- "aclogit_sim4_split"
+dat <- readRDS("./data/gpkg/2.1_acChoiceSet_rumsim4_split_4283.gpkg")  # this is the generalised data with static site attributes
+b <- read_excel("./data/03_data/aclogit_sim4_split.xlsx")
+v <- read_excel("./data/03_data/aclogit_sim4_split.xlsx", sheet = "v", col_names = rep("x", 38))%>%   distinct()
+
+
+# sim <- "aclogit_test"
+# dat <- readRDS("./data/gpkg/2.1_acChoiceSet_test4283.gpkg")  # this is the generalised data with static site attributes
+# b <- read_excel("./data/03_data/aclogit_test_split.xlsx")
+# v <- read_excel("./data/03_data/aclogit_test_split.xlsx", sheet = "v", col_names = rep("x", 25)) %>%   distinct()
 ```
 
 # Rearrange data
@@ -89,8 +95,10 @@ summary(b$Coef) # check min and max, the more extreme the values the more inflat
 # Error 
 Generates coefficients drawn from within the ci of each variable. Draws n1 numbers (nrow) from within a multivariate normal distribution for each variable (length); mu = vector of means, Sigma = covarience matrix
 ```{r error, include = FALSE}
-    n1 <- 1000 # number of samples (all estimates)
+    n1 <- 100 # number of samples (all estimates)
     mvn_b <- mvrnorm(n1, mu = b$Coef, Sigma = as.matrix(v)) 
+    # mvn_b[1,] <- b$Coef
+    # mvn_b[2,] <- b$Coef
 
 # checkpoint
 dim(mvn_b)[1] == n1 # should be true
@@ -113,6 +121,13 @@ We expect recreator  (i) to choose the site (j) with the highest expected utilit
   vars <- c("travelCost", names(id_vars)) 
   
 # turn defined vars into matrix from dat, make sure there is no geometry
+    
+    dat2 <- dat
+    dat <- dat2
+      
+    dat <- dat %>% distinct(BR, gridID_alt, .keep_all = T)
+    
+    
     rum_matrix <- as.matrix(dat[, vars])
 
 # create an empty utility matrix
@@ -189,7 +204,7 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
     dat %<>% arrange(BR, gridID_alt)
     table(dat$gridID_alt == p$ID) # should all be true
     
-    logsum_sim <- Vj[ , lapply(.SD, sum), by = br, .SDcols = cols] #18876 trips
+    logsum_sim <- Vj[ , lapply(.SD, sum), by = br, .SDcols = cols] # 18876 trips
     
     p <- p[ , br := NULL]
     p <- p[ , ID := NULL]
@@ -205,7 +220,7 @@ The probability of a recreator (i) choosing site (j) is the exponential of the t
 # Extract Welfare
 ```{r welfare, include = FALSE}
 # Extracting the welfare impact
-    W <- logsum_sim[, -1] -  logsum_base[, -1]
+    W <- log(logsum_sim[, -1]) -  log(logsum_base[, -1])
     W <- t(W)/mvn_b[ ,1] # length of this does not match n1/mvn_b
     W <- t(W)
 

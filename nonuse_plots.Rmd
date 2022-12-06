@@ -1,0 +1,102 @@
+```{r setup, include = FALSE}
+# knitr options
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE, fig.align = 'center', fig.width=10, fig.height=7) 
+
+# libraries
+library(tidyverse)
+library(sp)
+library(raster)
+library(ggplot2)
+library(rgeos)
+library(rgdal)
+library(sf)
+library(RColorBrewer)
+library(ggspatial)
+library(spatstat)
+library(patchwork)
+library(forcats)
+library(knitr)
+library(haven)
+library(readxl)
+library(scales)
+
+# source 
+source("./functions/theme.R")
+
+# Data
+dat <- read_dta("./data/RAW/cv_dat")
+```
+
+# KDE plot
+```{r}
+## overall
+d <- dat %>% filter(!is.na(sz_percent))
+m <- round(mean(d$sz_percent))
+
+ggplot()+
+  geom_density(data = dat, aes(sz_percent), fill = 'Blue', colour = '#3c78d87a', alpha = 0.1) +
+  labs(x = "Optimal % of SZ in MP", y = "Density") +
+  geom_vline(xintercept = m, colour = '#3c78d87a') +
+  geom_text(aes(x = 60, label = paste0("Mean: ", m, "%"), y = 0.0195)) +
+  my_theme
+
+ggsave("./plots/non_use/per_sz.png", width = 8, height = 6) 
+
+
+#### both
+d1 <- dat %>% dplyr::select(qscm_m_sz_per_1, qscm_sc_sz_per_1) %>% 
+  rename("Marmion MP" = qscm_m_sz_per_1,
+         "South Coast MP" = qscm_sc_sz_per_1)
+
+d1 <- d1 %>% pivot_longer(cols = c(`Marmion MP`, `South Coast MP`), names_to = "MP")
+
+d2 <- d1 %>% filter(!is.na(value))
+
+m1 <- d2 %>% group_by(MP) %>% summarise(m = round(mean(value)))
+mm <- m1[1, 2]
+scm <- m1[2, 2]
+
+ggplot()+
+  geom_density(data = d2, aes(value, fill = MP, colour = MP), alpha = 0.1) +
+  labs(x = "Optimal % of SZ in MP", y = "Density") +
+  geom_vline(data = m1, aes(xintercept = m, color = MP)) +
+  # geom_text(aes(x = 60, label = paste0("Mean: ", mm, "%"), y = 0.0195)) +
+  # geom_text(aes(x = 60, label = paste0("Mean: ", scm, "%"), y = 0.0195)) +
+  my_theme
+
+## mamrion
+dm <- d2 %>% filter(MP %in% "Marmion MP")
+m <- round(mean(dm$value))
+
+ggplot()+
+  geom_density(data = dm, aes(value), fill = '#93c7f6ff', colour = "#1c4587", alpha = 0.5) +
+  labs(x = "Optimal % of Sanctuary Zones in Marine Park", y = "") +
+   geom_vline(aes(xintercept = m), colour = "#1c4587") +
+  scale_y_continuous(breaks = c(0.000, 0.005, 0.010, 0.015),
+       labels = c ("0", "5", "10", "15") )  +
+  geom_text(aes(x = 30, label = paste0("Mean: ", m, "%"), y = 0.0149)) +
+  my_theme
+
+ggsave("./plots/non_use/mper_sz.png", width = 5, height = 3) 
+```
+
+# bar plot
+```{r}
+dat <- read_excel("./data/RAW/agg_wtp_sz_n320.xlsx") %>% 
+  rename(sz_size = ...1) %>% 
+  mutate(sz_size = ifelse(sz_size %in% "sz5", 5,
+                          ifelse(sz_size %in% "sz15", 15,
+                                 ifelse(sz_size %in% "sz45", 45, sz_size)))) %>% 
+  mutate(sz_size = as.numeric(sz_size))
+
+ggplot(dat) +
+    aes(x = as.factor(sz_size), y = mean_wtp) +
+    geom_col(fill = '#cfe2f3ff') +
+    # geom_errorbar(aes(ymin = ci95_lower, ymax = ci95_upper), width = 0.2, 
+                  # position = position_dodge(.9)) +
+  labs(x = "% of Marine Park in Sanctuary Zones", y = "Willingness to pay")+
+  scale_y_continuous(labels = label_number(suffix = " M", prefix = "$"))+
+  my_theme
+
+ggsave("./plots/non_use/wtp_bar.png", width = 5, height = 3) 
+```
