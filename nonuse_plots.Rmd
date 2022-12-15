@@ -1,6 +1,6 @@
 ```{r setup, include = FALSE}
 # knitr options
-knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE, fig.align = 'center', fig.width=10, fig.height=7) 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE, fig.align = 'center', fig.width = 10, fig.height = 7) 
 
 # libraries
 library(tidyverse)
@@ -33,7 +33,7 @@ dat <- read_dta("./data/RAW/cv_dat")
 d <- dat %>% filter(!is.na(sz_percent))
 m <- round(mean(d$sz_percent))
 
-ggplot()+
+ggplot() +
   geom_density(data = dat, aes(sz_percent), fill = 'Blue', colour = '#3c78d87a', alpha = 0.1) +
   labs(x = "Optimal % of SZ in MP", y = "Density") +
   geom_vline(xintercept = m, colour = '#3c78d87a') +
@@ -56,7 +56,7 @@ m1 <- d2 %>% group_by(MP) %>% summarise(m = round(mean(value)))
 mm <- m1[1, 2]
 scm <- m1[2, 2]
 
-ggplot()+
+ggplot() +
   geom_density(data = d2, aes(value, fill = MP, colour = MP), alpha = 0.1) +
   labs(x = "Optimal % of SZ in MP", y = "Density") +
   geom_vline(data = m1, aes(xintercept = m, color = MP)) +
@@ -68,12 +68,12 @@ ggplot()+
 dm <- d2 %>% filter(MP %in% "Marmion MP")
 m <- round(mean(dm$value))
 
-ggplot()+
+ggplot() +
   geom_density(data = dm, aes(value), fill = '#93c7f6ff', colour = "#1c4587", alpha = 0.5) +
   labs(x = "Optimal % of Sanctuary Zones in Marine Park", y = "") +
    geom_vline(aes(xintercept = m), colour = "#1c4587") +
   scale_y_continuous(breaks = c(0.000, 0.005, 0.010, 0.015),
-       labels = c ("0", "5", "10", "15") )  +
+                     labels = c("0", "5", "10", "15")) +
   geom_text(aes(x = 30, label = paste0("Mean: ", m, "%"), y = 0.0149)) +
   my_theme
 
@@ -94,8 +94,8 @@ ggplot(dat) +
     geom_col(fill = '#cfe2f3ff') +
     # geom_errorbar(aes(ymin = ci95_lower, ymax = ci95_upper), width = 0.2, 
                   # position = position_dodge(.9)) +
-  labs(x = "% of Marine Park in Sanctuary Zones", y = "Willingness to pay")+
-  scale_y_continuous(labels = label_number(suffix = " M", prefix = "$"))+
+  labs(x = "% of Marine Park in Sanctuary Zones", y = "Willingness to pay") +
+  scale_y_continuous(labels = label_number(suffix = " M", prefix = "$")) +
   my_theme
 
 ggsave("./plots/non_use/wtp_bar.png", width = 5, height = 3) 
